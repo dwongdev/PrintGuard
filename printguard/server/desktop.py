@@ -14,6 +14,8 @@ from __future__ import annotations
 import io
 import multiprocessing
 import os
+import signal
+import socket
 import sys
 import threading
 import time
@@ -200,6 +202,35 @@ def _set_autostart(enabled: bool) -> None:
                     pass
 
 
+def _watch_termination(window: _Window, server: _Server) -> None:
+    """Turns SIGTERM and Ctrl-C into the same clean shutdown as the tray's Quit.
+
+    Without this, a kill or logout ends the process without stopping the window
+    process or the MediaMTX child, leaving the streaming ports held by an orphan
+    that makes the next launch crash-loop. Python-level signal handlers cannot do
+    it: they only run when the main thread executes bytecode, and the Cocoa run
+    loop owns the main thread. The C-level handler however always writes the
+    signal number to the wakeup fd no matter which thread received the signal,
+    so a reader thread performs the shutdown.
+    """
+    received, notify = socket.socketpair()
+    notify.setblocking(False)
+    signal.set_wakeup_fd(notify.fileno())
+    for sig in (signal.SIGTERM, signal.SIGINT):
+        signal.signal(sig, lambda *_: None)
+
+    def wait() -> None:
+        watched = {int(signal.SIGTERM), int(signal.SIGINT)}
+        while received.recv(1)[0] not in watched:
+            pass
+        notify.close()
+        window.close()
+        server.stop()
+        os._exit(0)
+
+    threading.Thread(target=wait, daemon=True).start()
+
+
 def _load_icon() -> Image.Image:
     """Loads the tray icon, reduced to a macOS menu-bar template silhouette.
 
@@ -254,6 +285,8 @@ def main() -> None:
     server.start()
     window = _Window(f"http://localhost:{port}")
     window.open()
+    if sys.platform == "darwin":
+        _watch_termination(window, server)
 
     def open_window(icon: pystray.Icon, item: pystray.MenuItem) -> None:
         window.open()
