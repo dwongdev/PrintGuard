@@ -154,8 +154,8 @@ export function Home() {
         </h1>
         <p className="reveal mx-auto mb-8 max-w-2xl text-[0.95rem] text-text-1 sm:text-lg" style={{ "--i": 2 } as React.CSSProperties}>
           PrintGuard watches your printer cameras with an on-device vision model, pauses the printer through
-          OctoPrint, Klipper or Bambu Lab when a defect holds, and pushes a snapshot to your phone. No cloud, no
-          subscription — your frames stay yours.
+          OctoPrint, Klipper, Prusa or Bambu Lab when a defect holds, and pushes a snapshot to your phone. No
+          cloud, no subscription — your frames stay yours.
         </p>
         <div className="reveal flex flex-wrap items-center justify-center gap-3" style={{ "--i": 3 } as React.CSSProperties}>
           <button className="btn btn-primary" onClick={launch}>Try the live demo →</button>
@@ -164,7 +164,7 @@ export function Home() {
         <div className="mt-10 flex items-center justify-center gap-6 sm:gap-12">
           <Spec index={3} value="≈5 MB" label="model" />
           <Spec index={4} value="0" label="frames to cloud" />
-          <Spec index={5} value="3" label="printer brands" />
+          <Spec index={5} value="4" label="printer brands" />
           <Spec index={6} value="GPL-2.0" label="licence" />
         </div>
       </section>
@@ -177,7 +177,7 @@ export function Home() {
         <p className="label mb-8 text-center">WHAT IT DOES</p>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Feature index={2} led="led-infer" title="Detect" body="A compact encoder scores every frame against failure prototypes, scheduled fairly across all your cameras." />
-          <Feature index={3} led="led-on" title="Act" body="A sustained defect pauses or cancels the print through OctoPrint, Klipper or Bambu — and inference rests while the printer is idle." />
+          <Feature index={3} led="led-on" title="Act" body="A sustained defect pauses or cancels the print through OctoPrint, Klipper, Prusa or Bambu — and inference rests while the printer is idle." />
           <Feature index={4} led="led-bad" title="Alert" body="The moment a defect holds, a snapshot lands on your phone over ntfy, Telegram or Discord." />
           <Feature index={5} led="led-warn" title="Fail safe" body="A watchdog warns the second a camera drops, a feed freezes or your printer stops answering. Nothing fails silently." />
         </div>
