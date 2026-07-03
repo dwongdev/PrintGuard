@@ -1,10 +1,11 @@
 FROM bluenviron/mediamtx:1.18.2 AS mediamtx
 
 FROM node:22-alpine AS web
-WORKDIR /build
+WORKDIR /build/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
+COPY docs/assets/ ../docs/assets/
 RUN npm run build
 
 FROM python:3.13-slim AS deps
@@ -23,7 +24,7 @@ COPY printguard/ printguard/
 COPY models/ models/
 COPY mediamtx.yml mediamtx.yml
 COPY THIRD_PARTY_NOTICES.md THIRD_PARTY_NOTICES.md
-COPY --from=web /build/dist static/
+COPY --from=web /build/web/dist static/
 ENV PATH="/app/.venv/bin:$PATH" \
     MODEL_DIR=/app/models \
     DATA_DIR=/data \
