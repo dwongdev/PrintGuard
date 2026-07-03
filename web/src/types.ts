@@ -206,6 +206,7 @@ export interface UpdateInfo {
   latest: string;
   available: boolean;
   releases: UpdateRelease[];
+  download: string | null;
   checked_at: number;
   releases_url: string;
 }

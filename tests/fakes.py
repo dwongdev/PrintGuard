@@ -36,6 +36,7 @@ class FakePlatform:
     workers = 1
     version = "2.1.0"
     update_repo: str | None = None
+    update_asset: str | None = None
 
     def __init__(self, infer_s: float = 0.05, failing: bool = False) -> None:
         self.infer_s = infer_s

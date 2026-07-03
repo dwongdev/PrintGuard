@@ -51,11 +51,16 @@ def _configure_environment() -> None:
 
     The data directory is always a writable per-user location; the model, UI and
     MediaMTX assets come from the bundle when frozen and from the repository when
-    running from source. ``setdefault`` leaves any explicit override in place.
+    running from source. The update asset names this platform's installer on each
+    release, so the update dialog can offer it for download. ``setdefault`` leaves
+    any explicit override in place.
     """
     data_dir = Path(platformdirs.user_data_dir(APP_NAME, APP_NAME))
     data_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("DATA_DIR", str(data_dir))
+    os.environ.setdefault(
+        "UPDATE_ASSET", "PrintGuard-macos-arm64.dmg" if sys.platform == "darwin" else "PrintGuard-windows-x64.zip"
+    )
     if not getattr(sys, "frozen", False):
         return
     bundle = Path(sys._MEIPASS)  # type: ignore[attr-defined]

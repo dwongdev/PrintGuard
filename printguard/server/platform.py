@@ -125,8 +125,11 @@ class ServerPlatform:
     mode = "hub"
     update_repo = "oliverbravery/PrintGuard"
 
-    def __init__(self, model_dir: Path, data_dir: Path, mediamtx_api: str, mediamtx_rtsp: str) -> None:
+    def __init__(
+        self, model_dir: Path, data_dir: Path, mediamtx_api: str, mediamtx_rtsp: str, update_asset: str | None = None
+    ) -> None:
         self.version = metadata.version("printguard")
+        self.update_asset = update_asset
         self.workers = max(1, (os.cpu_count() or 2) - 1)
         self._executor = ThreadPoolExecutor(max_workers=self.workers)
         self._thread_local = threading.local()

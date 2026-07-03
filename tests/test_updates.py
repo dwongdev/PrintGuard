@@ -8,7 +8,9 @@ from fakes import FakePlatform
 from printguard.engine.engine import Engine
 
 
-def _release(tag: str, body: str = "notes", *, draft: bool = False, prerelease: bool = False) -> dict:
+def _release(
+    tag: str, body: str = "notes", *, draft: bool = False, prerelease: bool = False, assets: list[str] | None = None
+) -> dict:
     return {
         "tag_name": tag,
         "name": tag.lstrip("v"),
@@ -17,6 +19,10 @@ def _release(tag: str, body: str = "notes", *, draft: bool = False, prerelease: 
         "draft": draft,
         "prerelease": prerelease,
         "published_at": "2026-06-18T00:00:00Z",
+        "assets": [
+            {"name": name, "browser_download_url": f"https://github.com/o/r/releases/download/{tag}/{name}"}
+            for name in assets or []
+        ],
     }
 
 
@@ -59,6 +65,23 @@ async def test_up_to_date_reports_no_update() -> None:
     assert update["available"] is False
     assert update["latest"] == "2.3.0"
     assert update["releases"] == []
+
+
+async def test_desktop_asset_resolves_to_latest_download() -> None:
+    releases = [
+        _release("v2.2.0", assets=["PrintGuard-macos-arm64.dmg"]),
+        _release("v2.3.0", assets=["PrintGuard-macos-arm64.dmg", "PrintGuard-windows-x64.zip"]),
+    ]
+    engine, platform = _engine(version="2.1.0", releases=releases)
+    platform.update_asset = "PrintGuard-macos-arm64.dmg"
+    update = await _check(engine)
+    assert update["download"] == "https://github.com/o/r/releases/download/v2.3.0/PrintGuard-macos-arm64.dmg"
+
+
+async def test_no_asset_means_no_download() -> None:
+    engine, _ = _engine(version="2.1.0", releases=[_release("v2.3.0", assets=["PrintGuard-macos-arm64.dmg"])])
+    update = await _check(engine)
+    assert update["download"] is None
 
 
 async def test_check_errors_when_repo_unset() -> None:

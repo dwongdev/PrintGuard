@@ -288,7 +288,9 @@ class Engine:
         """Fetches and stores the update status, raising if it cannot."""
         if not self.platform.update_repo:
             raise RuntimeError("update checks are not available in this mode")
-        self.update = await updates.fetch_updates(self.platform.http, self.platform.update_repo, self.platform.version)
+        self.update = await updates.fetch_updates(
+            self.platform.http, self.platform.update_repo, self.platform.version, self.platform.update_asset
+        )
 
     def _on_pipeline_error(self, message: str) -> None:
         self.emit({"event": "error", "message": message})

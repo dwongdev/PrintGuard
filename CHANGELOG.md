@@ -19,7 +19,8 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   Download it from the landing page or the
   [Releases page](https://github.com/oliverbravery/PrintGuard/releases) — the builds are unsigned for
   now, so the first launch needs a right-click → **Open** on macOS, or **More info → Run anyway** on
-  Windows. On Linux, run the Docker hub as before.
+  Windows. On Linux, run the Docker hub as before. When a newer version ships, the update dialog
+  offers the right download for your computer; the Docker hub keeps its pull instructions.
 
 - **Prusa printers now connect over PrusaLink.** Register a Prusa printer — MK4, MK4S, MK3.9,
   MK3.5, MINI, XL, CORE One, or an MK3/MK2.5 running PrusaLink on a Raspberry Pi — alongside

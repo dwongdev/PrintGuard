@@ -66,6 +66,7 @@ def create_app() -> FastAPI:
     mediamtx_hls = os.environ.get("MEDIAMTX_HLS", "http://localhost:8888")
     mediamtx_binary = os.environ.get("MEDIAMTX_BINARY")
     mediamtx_config = os.environ.get("MEDIAMTX_CONFIG", str(REPO_ROOT / "mediamtx.yml"))
+    update_asset = os.environ.get("UPDATE_ASSET") or None
     allowed_origins = {o.strip().rstrip("/") for o in os.environ.get("PRINTGUARD_ORIGINS", "").split(",") if o.strip()}
     internal_token = secrets.token_urlsafe(32)
     api_auth = ApiAuth(internal_token)
@@ -78,7 +79,7 @@ def create_app() -> FastAPI:
         if mediamtx_binary and Path(mediamtx_binary).exists():
             streamer = EmbeddedMediaMTX(mediamtx_binary, mediamtx_config, mediamtx_api)
             await streamer.start()
-        platform = ServerPlatform(model_dir, data_dir, mediamtx_api, mediamtx_rtsp)
+        platform = ServerPlatform(model_dir, data_dir, mediamtx_api, mediamtx_rtsp, update_asset)
         engine = Engine(platform)
         await engine.start()
         app.state.engine = engine

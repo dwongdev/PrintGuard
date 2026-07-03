@@ -54,6 +54,7 @@ class BrowserPlatform:
     workers = 1
     version = ""
     update_repo = None
+    update_asset = None
 
     def __init__(self, bridge: Any, assets: vision.Assets) -> None:
         self._bridge = bridge
