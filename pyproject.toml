@@ -22,6 +22,15 @@ dependencies = [
 
 [project.scripts]
 printguard = "printguard.server.app:main"
+printguard-desktop = "printguard.server.desktop:main"
+
+[project.optional-dependencies]
+desktop = [
+    "pillow>=10",
+    "platformdirs>=4",
+    "pystray>=0.19.5",
+    "pywebview>=6.2",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -32,6 +41,7 @@ packages = ["printguard"]
 
 [dependency-groups]
 dev = [
+    "pyinstaller>=6.11",
     "pytest>=9.0.3",
     "pytest-asyncio>=1.4.0",
 ]
