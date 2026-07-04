@@ -82,9 +82,23 @@ Events (engine → UI): a full `state` snapshot (on connect, after every command
 
 `report.send` is the anonymous bug report ([`engine/reports.py`](../printguard/engine/reports.py)):
 one user-initiated POST of a Sentry feedback envelope — description, optional contact email,
-user-attached files and a diagnostics bundle with every credential redacted — through
-`platform.http`, so it works identically in both modes. There is no SDK and no automatic
-telemetry; nothing is sent unless the user submits a report.
+user-attached files, a diagnostics bundle and the engine and UI log tails, with every
+credential redacted — through `platform.http`, so it works identically in both modes. There
+is no SDK and no automatic telemetry; nothing is sent unless the user submits a report.
+
+## Logging
+
+One setup ([`engine/logs.py`](../printguard/engine/logs.py)) serves every runtime: entry
+points call it once and records flow to stdout for `docker logs`, to a rotating file where
+no console exists (the desktop app sets `LOG_FILE` in its data directory), and into a
+bounded in-memory tail. Emitted alert, warning, error and device events are logged as they
+broadcast, so the tail carries the same timeline the UI shows plus the lifecycle around it
+— boot, camera attach/drop, resource registration, printer actions, API and socket denials.
+Uvicorn runs without its own log config so its records land in the same handlers. The UI
+keeps its own ring ([`web/src/log.ts`](../web/src/log.ts)) of boot milestones, socket drops,
+toasts, console warnings/errors and uncaught exceptions. Bug reports attach both tails,
+scrubbed of every configured credential value. `LOG_LEVEL=DEBUG` adds command traces and
+exception tracebacks.
 
 ## The programmatic surface (hub only)
 

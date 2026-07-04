@@ -2,15 +2,18 @@
 
 A report is a single user-initiated POST of a Sentry envelope — a feedback
 item carrying the user's description and optional contact email, plus a
-sanitised diagnostics bundle and any files the user attached. There is no
-SDK and no automatic telemetry: nothing leaves the device unless the user
-submits a report, and every credential is stripped before it does.
+sanitised diagnostics bundle, the engine and UI log tails and any files the
+user attached. There is no SDK and no automatic telemetry: nothing leaves
+the device unless the user submits a report, and every credential is
+stripped before it does — structurally from the diagnostics, and by value
+from the freeform log text, where a library error message may embed one.
 """
 
 from __future__ import annotations
 
 import base64
 import json
+import logging
 import sys
 import time
 import uuid
@@ -19,6 +22,7 @@ from platform import platform as host_os
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit, urlunsplit
 
+from . import logs
 from .adapters import HttpFn
 from .integrations import INTEGRATIONS
 from .notifiers import NOTIFIERS
@@ -26,6 +30,8 @@ from .platform import Platform
 
 if TYPE_CHECKING:
     from .engine import Engine
+
+logger = logging.getLogger(__name__)
 
 SENTRY_DSN = "https://b442a687c779ef1e4542cd610b867f54@o4511676954902528.ingest.de.sentry.io/4511676966502480"
 REDACTED = "[redacted]"
@@ -74,6 +80,34 @@ def deployment(platform: Platform) -> str:
     if platform.update_asset:
         return "desktop"
     return "local" if platform.mode == "local" else "docker"
+
+
+def collect_secrets(engine: "Engine") -> set[str]:
+    """Every configured credential value, for scrubbing freeform report text."""
+    secrets: set[str] = set()
+    for printer in engine.printers.values():
+        adapter = INTEGRATIONS.get(printer.provider)
+        keys = adapter.secret_keys() if adapter else set(printer.config)
+        secrets |= {str(printer.config[key]) for key in keys if printer.config.get(key)}
+    for provider, config in engine.settings.get("notifiers", {}).items():
+        adapter = NOTIFIERS.get(provider)
+        keys = adapter.secret_keys() if adapter else set(config)
+        secrets |= {str(config[key]) for key in keys if config.get(key)}
+    if (engine.settings.get("mqtt") or {}).get("password"):
+        secrets.add(str(engine.settings["mqtt"]["password"]))
+    for camera in engine.cameras.values():
+        if camera.source.get("access_code"):
+            secrets.add(str(camera.source["access_code"]))
+        parts = urlsplit(str(camera.source.get("url") or ""))
+        secrets |= {part for part in (parts.username, parts.password) if part}
+    return secrets
+
+
+def scrub(text: str, secrets: set[str]) -> str:
+    """Replaces every occurrence of a credential value with the redaction marker."""
+    for secret in secrets:
+        text = text.replace(secret, REDACTED)
+    return text
 
 
 def diagnostics(engine: "Engine") -> dict[str, Any]:
@@ -168,6 +202,8 @@ async def send_report(
     client: dict[str, Any],
     diag: dict[str, Any],
     attachments: list[dict[str, Any]],
+    ui_logs: list[str],
+    secrets: set[str],
 ) -> None:
     """Submits one bug report envelope to the feedback inbox.
 
@@ -180,6 +216,11 @@ async def send_report(
         diag: The sanitised diagnostics bundle, attached as JSON.
         attachments: User-attached files as {name, type, data} with
             base64-encoded data.
+        ui_logs: The UI's recent log lines; the engine's own tail is read
+            from the logging module. Both are attached scrubbed of every
+            value in ``secrets``, as is the diagnostics JSON, since error
+            strings inside either may embed a credential.
+        secrets: Credential values to scrub, from ``collect_secrets``.
 
     Raises:
         ValueError: If the description is empty.
@@ -187,7 +228,11 @@ async def send_report(
     """
     if not message:
         raise ValueError("a description of the problem is required")
-    files = [("diagnostics.json", "application/json", json.dumps(diag, indent=2).encode())]
+    files = [("diagnostics.json", "application/json", scrub(json.dumps(diag, indent=2), secrets).encode())]
+    if logs.recent():
+        files.append(("engine.log", "text/plain", scrub("\n".join(logs.recent()), secrets).encode()))
+    if ui_logs:
+        files.append(("ui.log", "text/plain", scrub("\n".join(str(line) for line in ui_logs), secrets).encode()))
     for attachment in attachments:
         files.append(
             (
@@ -206,3 +251,4 @@ async def send_report(
     )
     if status >= 300:
         raise RuntimeError(f"the report was not accepted (HTTP {status})")
+    logger.info("bug report sent (%d attachments)", len(files))

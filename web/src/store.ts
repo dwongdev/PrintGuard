@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { currentLayout } from "./layout";
 import { bootLocal } from "./local";
+import { log } from "./log";
 import { resumePublishers } from "./stream";
 import { applyTheme } from "./theme";
 import type { Camera, CameraSource, EngineLink, EngineState, Layout, LayoutSection, Mode, Monitor, MonitorHistory, ScorePoint } from "./types";
@@ -105,9 +106,11 @@ function connectHub(onEvent: (event: any) => void, onDown: () => void): EngineLi
   let closed = false;
   const open = () => {
     socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/ws`);
+    socket.onopen = () => log("info", "hub socket connected");
     socket.onmessage = (msg) => onEvent(JSON.parse(msg.data));
     socket.onclose = () => {
       if (!closed) {
+        log("warn", "hub socket closed — reconnecting");
         onDown();
         setTimeout(open, 1500);
       }
@@ -256,16 +259,21 @@ export const useStore = create<PgStore>((set, get) => {
   };
 
   const boot = async (mode: Mode) => {
+    log("info", `boot: ${mode} mode`);
     set({ mode, phase: "booting", bootMsg: mode === "hub" ? "Connecting to hub" : "Preparing local engine" });
     try {
       if (mode === "hub") {
         const link = connectHub(onEvent, () => set({ bootMsg: "Reconnecting" }));
         set({ link });
       } else {
-        const link = await bootLocal(onEvent, (bootMsg) => set({ bootMsg }));
+        const link = await bootLocal(onEvent, (bootMsg) => {
+          log("info", `local boot: ${bootMsg}`);
+          set({ bootMsg });
+        });
         set({ link });
       }
     } catch (err) {
+      log("error", "boot failed:", err);
       set({ phase: "error", bootMsg: String(err) });
     }
   };
@@ -408,6 +416,7 @@ export const useStore = create<PgStore>((set, get) => {
     },
 
     toast(kind, text) {
+      log(kind === "error" ? "error" : kind === "alert" ? "warn" : "info", "toast:", text);
       const id = ++toastSeq;
       set((s) => ({ toasts: [...s.toasts, { id, kind, text }] }));
       setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 6000);

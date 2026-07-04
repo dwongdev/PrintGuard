@@ -6,6 +6,7 @@ import asyncio
 import json
 from typing import Any
 
+from ..engine import logs
 from ..engine.engine import Engine
 from .platform import BrowserPlatform
 
@@ -21,6 +22,7 @@ async def start(sink: Any) -> None:
     global _engine
     from js import window
 
+    logs.setup()
     platform = await BrowserPlatform.create(window.__pg)
     _engine = Engine(platform)
     _engine.add_sink(lambda event: sink(json.dumps(event)))

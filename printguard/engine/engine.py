@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import time
 import uuid
 from collections import deque
@@ -28,11 +29,14 @@ from .scheduler import Scheduler
 from .tokens import new_token
 from .watchdog import Watchdog
 
+logger = logging.getLogger(__name__)
+
 STATE_TICK_S = 1.0
 REATTACH_EVERY_TICKS = 10
 REQUEST_TIMEOUT_S = 15.0
 RECENT_EVENTS_MAX = 100
 RECENT_EVENT_TYPES = ("alert", "warning", "device", "error")
+EVENT_LOG_LEVELS = {"alert": logging.INFO, "warning": logging.WARNING, "error": logging.ERROR, "device": logging.DEBUG}
 UPDATE_CHECK_INTERVAL_S = 86400.0
 WEBRTC_UNSUPPORTED = "WebRTC streams (WHEP/WHIP) can't be read — use the MJPEG (…?action=stream) or RTSP URL instead."
 
@@ -119,6 +123,14 @@ class Engine:
         ]
         if self.platform.update_repo:
             self._tasks.append(asyncio.ensure_future(self._update_loop()))
+        logger.info(
+            "engine started: v%s %s, %d cameras, %d printers, %d monitors restored",
+            self.platform.version,
+            self.platform.mode,
+            len(self.cameras.items),
+            len(self.printers.items),
+            len(self.monitors),
+        )
 
     async def stop(self) -> None:
         """Cancels background loops and closes every frame source."""
@@ -126,6 +138,7 @@ class Engine:
             task.cancel()
         for camera_id in list(self.cameras.items):
             self.cameras.remove(camera_id)
+        logger.info("engine stopped")
 
     def add_sink(self, sink: Callable[[dict[str, Any]], None]) -> None:
         """Subscribes a transport to engine events and sends it a snapshot."""
@@ -138,13 +151,22 @@ class Engine:
             self._sinks.remove(sink)
 
     def emit(self, event: dict[str, Any]) -> None:
-        """Broadcasts an event to every connected transport."""
+        """Broadcasts an event to every connected transport.
+
+        Alert, warning, error and device events are also written to the log,
+        so the log tail carries the same timeline a maintainer sees in a bug
+        report's recent events — plus everything around it.
+        """
+        level = EVENT_LOG_LEVELS.get(event.get("event", ""))
+        if level is not None:
+            logger.log(level, "%s %s", event["event"], {k: v for k, v in event.items() if k not in ("event", "req_id")})
         if event.get("event") in RECENT_EVENT_TYPES:
             self._recent.append(event)
         for sink in list(self._sinks):
             try:
                 sink(event)
             except Exception:
+                logger.warning("dropping transport sink that failed to accept an event", exc_info=True)
                 self._sinks.remove(sink)
 
     def state_event(self) -> dict[str, Any]:
@@ -179,10 +201,12 @@ class Engine:
             self.emit({"event": "error", "message": f"unknown command {message.get('cmd')!r}"})
             return
         req_id = message.get("req_id")
+        logger.debug("command %s", message.get("cmd"))
         try:
             await handler(message)
             self._sync(req_id)
         except Exception as exc:
+            logger.warning("command %s failed", message.get("cmd"), exc_info=True)
             self.emit({"event": "error", "message": str(exc), "req_id": req_id})
 
     async def request(self, message: dict[str, Any], *, timeout: float = REQUEST_TIMEOUT_S) -> list[dict[str, Any]]:
@@ -253,13 +277,22 @@ class Engine:
         self.emit(event)
 
     async def _attach(self, camera: Camera) -> None:
+        """Opens a camera's frame source.
+
+        A failure logs at debug only: the ticker retries every few seconds,
+        so per-attempt warnings would flood the tail, and the watchdog
+        already raises an edge-triggered warning when a watched camera's
+        outage sustains.
+        """
         try:
             source = await self.platform.open_camera(camera.id, camera.source)
-        except Exception:
+        except Exception as exc:
+            logger.debug("camera '%s' (%s) failed to attach: %s", camera.name, camera.id, exc)
             return
         camera.frame_source = source
         if source.fps > 0:
             camera.max_fps = source.fps
+        logger.info("camera '%s' (%s) attached at %.1f fps", camera.name, camera.id, source.fps)
 
     async def _ticker(self) -> None:
         tick = 0
@@ -281,8 +314,8 @@ class Engine:
                 try:
                     await self._check_updates()
                     self.emit(self.state_event())
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.warning("update check failed: %s", exc)
             await asyncio.sleep(UPDATE_CHECK_INTERVAL_S)
 
     async def _check_updates(self) -> None:
@@ -408,7 +441,8 @@ class Engine:
             return
         try:
             exposed = await adapter.cameras(self.platform.http, printer.config)
-        except Exception:
+        except Exception as exc:
+            logger.warning("printer '%s' camera listing failed: %s", printer.name, exc)
             return
         if self.printers.get(printer.id) is None:
             return
@@ -424,7 +458,8 @@ class Engine:
             camera = Camera(id=camera_id, name=descriptor["name"], source=source, printer_id=printer.id, max_fps=15.0)
             try:
                 source = await self.platform.open_camera(camera_id, camera.source)
-            except Exception:
+            except Exception as exc:
+                logger.warning("printer camera '%s' failed to open: %s", descriptor["name"], exc)
                 continue
             camera.frame_source = source
             if source.fps > 0:
@@ -489,6 +524,7 @@ class Engine:
     async def _cmd_monitor_add(self, message: dict[str, Any]) -> None:
         monitor_id = uuid.uuid4().hex[:8]
         self.monitors[monitor_id] = sanitise_monitor(monitor_id, message.get("monitor", {}))
+        logger.info("monitor %s registered", monitor_id)
 
     async def _cmd_monitor_update(self, message: dict[str, Any]) -> None:
         existing = self.monitors.get(message["id"])
@@ -497,7 +533,8 @@ class Engine:
         self.monitors[message["id"]] = sanitise_monitor(message["id"], message.get("patch", {}), existing)
 
     async def _cmd_monitor_remove(self, message: dict[str, Any]) -> None:
-        self.monitors.pop(message["id"], None)
+        if self.monitors.pop(message["id"], None) is not None:
+            logger.info("monitor %s removed", message["id"])
         self.history.pop(message["id"], None)
 
     async def _cmd_history_get(self, message: dict[str, Any]) -> None:
@@ -522,7 +559,9 @@ class Engine:
             self.emit({"event": "notify_test", "provider": adapter.id, "ok": False, "error": str(exc), "req_id": message.get("req_id")})
 
     async def _cmd_settings_update(self, message: dict[str, Any]) -> None:
-        self.settings = {**self.settings, **{k: v for k, v in message.get("patch", {}).items() if k in SETTINGS_DEFAULTS}}
+        patch = {k: v for k, v in message.get("patch", {}).items() if k in SETTINGS_DEFAULTS}
+        self.settings = {**self.settings, **patch}
+        logger.info("settings updated: %s", sorted(patch))
 
     async def _cmd_token_create(self, message: dict[str, Any]) -> None:
         name = str(message.get("name") or "token").strip() or "token"
@@ -547,7 +586,10 @@ class Engine:
                 client=message.get("client") or {},
                 diag=reports.diagnostics(self),
                 attachments=message.get("attachments") or [],
+                ui_logs=message.get("logs") or [],
+                secrets=reports.collect_secrets(self),
             )
             self.emit({"event": "report_sent", "ok": True, "req_id": message.get("req_id")})
         except Exception as exc:
+            logger.warning("bug report failed to send", exc_info=True)
             self.emit({"event": "report_sent", "ok": False, "error": str(exc), "req_id": message.get("req_id")})

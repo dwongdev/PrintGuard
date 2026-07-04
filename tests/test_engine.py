@@ -6,13 +6,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import logging
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 import numpy as np
 from fakes import FakePlatform
 
-from printguard.engine import reports, vision, watchdog
+from printguard.engine import logs, reports, vision, watchdog
 from printguard.engine.engine import Engine
 from printguard.engine.integrations import INTEGRATIONS
 
@@ -379,9 +380,25 @@ async def test_monitor_remove_clears_history() -> None:
         assert monitor_id not in engine.history, "history is dropped with its monitor"
 
 
+@asynccontextmanager
+async def configured_logging():
+    """Installs the real logging setup for a test, restoring pytest's after."""
+    root = logging.getLogger()
+    handlers, level = root.handlers[:], root.level
+    logs.tail.lines.clear()
+    logs.setup()
+    try:
+        yield
+    finally:
+        root.handlers.clear()
+        for handler in handlers:
+            root.addHandler(handler)
+        root.setLevel(level)
+
+
 async def test_report_send_redacts_credentials_and_posts_feedback() -> None:
     platform = FakePlatform(infer_s=0.02)
-    async with running_engine(platform, camera_fps=[]) as (engine, events):
+    async with configured_logging(), running_engine(platform, camera_fps=[]) as (engine, events):
         await engine.handle(
             {"cmd": "camera.add", "name": "ip cam", "source": {"kind": "url", "url": "rtsp://user:hunter2@cam.local/stream", "fps": 5.0}}
         )
@@ -397,6 +414,7 @@ async def test_report_send_redacts_credentials_and_posts_feedback() -> None:
                 },
             }
         )
+        logging.getLogger("printguard.test").warning("upstream rejected credential octo-secret")
         await engine.handle(
             {
                 "cmd": "report.send",
@@ -404,6 +422,7 @@ async def test_report_send_redacts_credentials_and_posts_feedback() -> None:
                 "message": "the feed froze",
                 "email": "user@example.com",
                 "client": {"url": "http://hub/#hub", "user_agent": "TestBrowser"},
+                "logs": ["2026-07-04T10:00:00Z ERROR notifier tg-secret rejected"],
                 "attachments": [{"name": "shot.png", "type": "image/png", "data": base64.b64encode(b"\x89PNG fake").decode()}],
             }
         )
@@ -423,6 +442,9 @@ async def test_report_send_redacts_credentials_and_posts_feedback() -> None:
         assert secret not in text, f"credential {secret!r} leaked into the report"
     assert "rtsp://cam.local/stream" in text, "camera URL should keep its shape without credentials"
     assert "diagnostics.json" in text and "shot.png" in text
+    for log_file, marker in (("engine.log", "upstream rejected credential [redacted]"), ("ui.log", "notifier [redacted] rejected")):
+        assert f'"filename": "{log_file}"' in text and marker in text, f"{log_file} missing or not scrubbed"
+    assert "engine started" in text, "engine lifecycle lines missing from the attached log tail"
     assert b"\x89PNG fake" in request["data"], "user attachment bytes missing from the envelope"
 
 

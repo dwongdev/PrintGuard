@@ -9,6 +9,7 @@ the same tags drive both this API's bearer-scope guard and the MCP tool filter.
 from __future__ import annotations
 
 import hmac
+import logging
 from typing import Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 
@@ -20,6 +21,8 @@ from ..engine.engine import Engine
 from ..engine.integrations import INTEGRATIONS
 from ..engine.notifiers import NOTIFIERS
 from ..engine.tokens import SCOPE_ORDER, expand_scope, hash_secret
+
+logger = logging.getLogger(__name__)
 
 
 def route_scope(tags: list[str] | None) -> str:
@@ -66,9 +69,11 @@ async def scope_guard(request: Request) -> None:
     auth: ApiAuth = request.app.state.api_auth
     granted = auth.resolve(request.headers.get("authorization"), request.app.state.engine.token_scopes())
     if granted is None:
+        logger.warning("rejected API request with missing or invalid token: %s %s", request.method, request.url.path)
         raise HTTPException(401, "missing or invalid token", {"WWW-Authenticate": "Bearer"})
     required = route_scope(getattr(request.scope.get("route"), "tags", None))
     if required not in granted:
+        logger.warning("rejected API request lacking %s scope: %s %s", required, request.method, request.url.path)
         raise HTTPException(403, f"requires {required} scope")
 
 

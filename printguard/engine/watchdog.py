@@ -10,6 +10,7 @@ configured notifiers so the user hears about them away from the dashboard.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +21,8 @@ from .platform import Frame
 
 if TYPE_CHECKING:
     from .engine import Engine
+
+logger = logging.getLogger(__name__)
 
 DEVICE_POLL_S = 5.0
 NOTIFY_COOLDOWN_S = 30.0
@@ -190,6 +193,7 @@ class Watchdog:
             except Exception as exc:
                 last_error = exc
                 await asyncio.sleep(ACT_RETRY_S)
+        logger.debug("printer action traceback for '%s'", monitor["name"], exc_info=last_error)
         self._engine.emit({"event": "error", "message": f"{monitor['name']}: automatic {wanted} failed: {last_error}"})
         return "failed"
 
@@ -214,4 +218,5 @@ class Watchdog:
             try:
                 await NOTIFIERS[notifier_id].send(self._engine.platform.http, config, title, body, image)
             except Exception as exc:
+                logger.debug("notifier %s delivery traceback", notifier_id, exc_info=True)
                 self._engine.emit({"event": "error", "message": f"{NOTIFIERS[notifier_id].label} notification failed: {exc}"})
