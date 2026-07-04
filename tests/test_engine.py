@@ -5,13 +5,14 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import json
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 
 import numpy as np
 from fakes import FakePlatform
 
-from printguard.engine import vision, watchdog
+from printguard.engine import reports, vision, watchdog
 from printguard.engine.engine import Engine
 from printguard.engine.integrations import INTEGRATIONS
 
@@ -376,3 +377,63 @@ async def test_monitor_remove_clears_history() -> None:
         assert engine.history[monitor_id].buckets, "history should accumulate while watching"
         await engine.handle({"cmd": "monitor.remove", "id": monitor_id})
         assert monitor_id not in engine.history, "history is dropped with its monitor"
+
+
+async def test_report_send_redacts_credentials_and_posts_feedback() -> None:
+    platform = FakePlatform(infer_s=0.02)
+    async with running_engine(platform, camera_fps=[]) as (engine, events):
+        await engine.handle(
+            {"cmd": "camera.add", "name": "ip cam", "source": {"kind": "url", "url": "rtsp://user:hunter2@cam.local/stream", "fps": 5.0}}
+        )
+        await engine.handle(
+            {"cmd": "printer.add", "printer": {"name": "P", "provider": "octoprint", "config": {"base_url": "http://op", "api_key": "octo-secret"}}}
+        )
+        await engine.handle(
+            {
+                "cmd": "settings.update",
+                "patch": {
+                    "notifiers": {"telegram": {"bot_token": "tg-secret", "chat_id": "1"}},
+                    "mqtt": {"host": "broker", "password": "mqtt-secret"},
+                },
+            }
+        )
+        await engine.handle(
+            {
+                "cmd": "report.send",
+                "req_id": 9,
+                "message": "the feed froze",
+                "email": "user@example.com",
+                "client": {"url": "http://hub/#hub", "user_agent": "TestBrowser"},
+                "attachments": [{"name": "shot.png", "type": "image/png", "data": base64.b64encode(b"\x89PNG fake").decode()}],
+            }
+        )
+
+    sent = [e for e in events if e.get("event") == "report_sent"]
+    assert sent and sent[0]["ok"] and sent[0]["req_id"] == 9
+    request = next(r for r in platform.http_requests if "sentry.io" in r["url"])
+    assert request["url"] == reports.envelope_endpoint(reports.SENTRY_DSN)
+    assert request["headers"]["Content-Type"] == "application/x-sentry-envelope"
+    lines = request["data"].split(b"\n")
+    assert json.loads(lines[1]) == {"type": "feedback"}
+    event = json.loads(lines[2])
+    assert event["contexts"]["feedback"] == {"message": "the feed froze", "contact_email": "user@example.com", "url": "http://hub/#hub"}
+    assert event["release"] == f"printguard@{platform.version}" and event["environment"] == "docker"
+    text = request["data"].decode(errors="replace")
+    for secret in ("hunter2", "octo-secret", "tg-secret", "mqtt-secret"):
+        assert secret not in text, f"credential {secret!r} leaked into the report"
+    assert "rtsp://cam.local/stream" in text, "camera URL should keep its shape without credentials"
+    assert "diagnostics.json" in text and "shot.png" in text
+    assert b"\x89PNG fake" in request["data"], "user attachment bytes missing from the envelope"
+
+
+async def test_report_send_surfaces_failure() -> None:
+    platform = FakePlatform(infer_s=0.02)
+    async with running_engine(platform, camera_fps=[]) as (engine, events):
+        await engine.handle({"cmd": "report.send", "req_id": 1, "message": "   "})
+        platform.report_status = 429
+        await engine.handle({"cmd": "report.send", "req_id": 2, "message": "still broken"})
+
+    sent = [e for e in events if e.get("event") == "report_sent"]
+    assert [e["ok"] for e in sent] == [False, False]
+    assert "description" in sent[0]["error"]
+    assert "429" in sent[1]["error"]

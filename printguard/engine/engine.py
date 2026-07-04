@@ -15,7 +15,7 @@ import uuid
 from collections import deque
 from typing import Any, Callable
 
-from . import updates, vision
+from . import reports, updates, vision
 from .cameras import sanitise_camera, webrtc_endpoint
 from .history import MonitorHistory
 from .integrations import INTEGRATIONS, DeviceAction, integrations_meta
@@ -77,6 +77,7 @@ class Engine:
             "token.create": self._cmd_token_create,
             "token.remove": self._cmd_token_remove,
             "update.check": self._cmd_update_check,
+            "report.send": self._cmd_report_send,
         }
 
     async def start(self) -> None:
@@ -535,3 +536,18 @@ class Engine:
 
     async def _cmd_update_check(self, message: dict[str, Any]) -> None:
         await self._check_updates()
+
+    async def _cmd_report_send(self, message: dict[str, Any]) -> None:
+        try:
+            await reports.send_report(
+                self.platform.http,
+                reports.SENTRY_DSN,
+                message=str(message.get("message") or "").strip(),
+                email=str(message.get("email") or "").strip() or None,
+                client=message.get("client") or {},
+                diag=reports.diagnostics(self),
+                attachments=message.get("attachments") or [],
+            )
+            self.emit({"event": "report_sent", "ok": True, "req_id": message.get("req_id")})
+        except Exception as exc:
+            self.emit({"event": "report_sent", "ok": False, "error": str(exc), "req_id": message.get("req_id")})
