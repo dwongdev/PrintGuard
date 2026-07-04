@@ -31,6 +31,12 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   printer directly and never to Prusa's cloud, so **PrusaConnect is not involved**. Like Bambu,
   Prusa is offered in **hub mode only**.
 
+- **Report a bug straight from the dashboard.** Hit the ⚑ chip in the header, describe what
+  happened, attach screenshots and optionally leave an email for follow-up — anonymously, no
+  account needed. Each report carries a diagnostics bundle (version, platform, configuration,
+  recent errors and warnings) with **every credential stripped**, and no camera frames unless
+  you attach them yourself. Nothing is ever sent unless you submit a report.
+
 - **A detection history for every monitor.** Open a monitor's detail page to see its defect risk
   charted over selectable periods, alongside a snapshot of every alert it fired — what the camera
   saw at the moment PrintGuard acted.

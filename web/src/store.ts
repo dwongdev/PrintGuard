@@ -46,7 +46,7 @@ export interface Toast {
   text: string;
 }
 
-export type DialogKind = "cameras" | "printers" | "monitor" | "settings" | "update" | "guide" | null;
+export type DialogKind = "cameras" | "printers" | "monitor" | "settings" | "update" | "guide" | "report" | null;
 
 interface PgStore {
   mode: Mode | null;
@@ -61,6 +61,7 @@ interface PgStore {
   testing: boolean;
   notifyTest: { provider: string; ok: boolean; error?: string } | null;
   testingNotifier: string | null;
+  reportResult: { ok: boolean; error?: string } | null;
   pending: Record<string, { req_id: number; cmd: string }>;
   toasts: Toast[];
   detailId: string | null;
@@ -229,6 +230,9 @@ export const useStore = create<PgStore>((set, get) => {
       case "notify_test":
         set({ notifyTest: event, testingNotifier: null });
         break;
+      case "report_sent":
+        set({ reportResult: event });
+        break;
       case "token_created":
         set({ createdToken: { name: event.name, secret: event.token } });
         break;
@@ -288,6 +292,7 @@ export const useStore = create<PgStore>((set, get) => {
     testing: false,
     notifyTest: null,
     testingNotifier: null,
+    reportResult: null,
     pending: {},
     toasts: [],
     detailId: null,
@@ -369,7 +374,7 @@ export const useStore = create<PgStore>((set, get) => {
 
     openDialog(dialog, focusCameraId = null) {
       get().flushUpdates();
-      set({ dialog, discovered: null, printerTest: null, notifyTest: null, focusCameraId, createdToken: null });
+      set({ dialog, discovered: null, printerTest: null, notifyTest: null, reportResult: null, focusCameraId, createdToken: null });
     },
 
     openDetail(detailId) {

@@ -11,6 +11,7 @@ import { Header, MobileActionBar } from "./Header";
 import { MonitorDialog } from "./MonitorDialog";
 import { MonitorTile } from "./MonitorTile";
 import { PrintersDialog } from "./PrintersDialog";
+import { ReportDialog } from "./ReportDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { rectSortingStrategy, Sortable } from "./Sortable";
 import { StatsPage } from "./StatsPage";
@@ -100,6 +101,7 @@ export function Dashboard() {
       {dialog === "settings" && <SettingsDialog />}
       {dialog === "update" && <UpdateDialog />}
       {dialog === "guide" && <GuideDialog />}
+      {dialog === "report" && <ReportDialog />}
       {detail && <DetailPanel monitor={detail} />}
       {stats && <StatsPage monitor={stats} />}
       <Toasts />
