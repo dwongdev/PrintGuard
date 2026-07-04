@@ -13,13 +13,14 @@ import logging
 import os
 import re
 import secrets
+import time
 from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import httpx
 import uvicorn
-from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
@@ -40,6 +41,7 @@ logger = logging.getLogger(__name__)
 
 PACKAGE_ROOT = Path(printguard.__file__).parent
 REPO_ROOT = PACKAGE_ROOT.parent
+HLS_WARN_THROTTLE_S = 30.0
 
 
 def origin_allowed(websocket: WebSocket, allowed: set[str]) -> bool:
@@ -151,13 +153,26 @@ def create_app() -> FastAPI:
             engine.remove_sink(sink)
             pump_task.cancel()
 
+    hls_warned_at = [0.0]
+
     @app.get("/hls/{path:path}")
     async def hls_proxy(path: str, request: Request) -> StreamingResponse:
-        """Streams LL-HLS playlists and segments from MediaMTX through the hub's own port."""
+        """Streams LL-HLS playlists and segments from MediaMTX through the hub's own port.
+
+        An unreachable MediaMTX answers 502 with a throttled warning — the
+        dashboard polls playlists every second, so letting the error escape
+        would flood the log with one ASGI traceback per poll.
+        """
         client: httpx.AsyncClient = app.state.hls
-        upstream = await client.send(
-            client.build_request("GET", f"/{path}", params=request.query_params), stream=True
-        )
+        try:
+            upstream = await client.send(
+                client.build_request("GET", f"/{path}", params=request.query_params), stream=True
+            )
+        except httpx.TransportError as exc:
+            if time.monotonic() - hls_warned_at[0] > HLS_WARN_THROTTLE_S:
+                hls_warned_at[0] = time.monotonic()
+                logger.warning("HLS upstream unreachable: %s", exc)
+            raise HTTPException(502, "stream engine unreachable") from exc
         hop_by_hop = {"connection", "keep-alive", "transfer-encoding", "content-length"}
         headers = {k: v for k, v in upstream.headers.items() if k.lower() not in hop_by_hop}
         if headers.get("location", "").startswith("/"):

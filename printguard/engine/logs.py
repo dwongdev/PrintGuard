@@ -52,7 +52,9 @@ def setup(level: str = "INFO", file: Path | None = None) -> None:
     Installs the in-memory tail, a stdout stream (absent in windowed
     PyInstaller builds, where stdout is None) and the optional file handler,
     replacing whatever was configured before so uvicorn's loggers propagate
-    here too.
+    here too. httpx is capped at WARNING: its per-request INFO lines flood
+    the tail, and they print full request URLs — which for Telegram embed
+    the bot token in the path — onto unscrubbed console logs.
     """
     formatter = logging.Formatter(FORMAT)
     handlers: list[logging.Handler] = [tail]
@@ -66,6 +68,7 @@ def setup(level: str = "INFO", file: Path | None = None) -> None:
         handler.setFormatter(formatter)
         root.addHandler(handler)
     root.setLevel(level.upper())
+    logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 def setup_from_env() -> None:

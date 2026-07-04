@@ -277,10 +277,17 @@ class Engine:
         self.emit(event)
 
     async def _attach(self, camera: Camera) -> None:
+        """Opens a camera's frame source.
+
+        A failure logs at debug only: the ticker retries every few seconds,
+        so per-attempt warnings would flood the tail, and the watchdog
+        already raises an edge-triggered warning when a watched camera's
+        outage sustains.
+        """
         try:
             source = await self.platform.open_camera(camera.id, camera.source)
         except Exception as exc:
-            logger.warning("camera '%s' (%s) failed to attach: %s", camera.name, camera.id, exc)
+            logger.debug("camera '%s' (%s) failed to attach: %s", camera.name, camera.id, exc)
             return
         camera.frame_source = source
         if source.fps > 0:
