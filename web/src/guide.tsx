@@ -161,4 +161,17 @@ export const GUIDE: GuideSection[] = [
       </>
     ),
   },
+  {
+    id: "report",
+    led: "led-warn",
+    title: "Something broken?",
+    body: (
+      <>
+        Report a bug from the <span className="mono">⚑</span> chip in the header — anonymously, no account
+        needed. Describe what happened, attach screenshots if they help, and optionally leave an email for
+        follow-up. A diagnostics bundle goes with it, with every credential stripped and no camera frames.
+      </>
+    ),
+    action: { label: "Report a bug", dialog: "report" },
+  },
 ];

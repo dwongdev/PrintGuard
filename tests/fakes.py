@@ -43,7 +43,9 @@ class FakePlatform:
         self.failing = failing
         self.device_status = "Printing"
         self.reject_actions = False
+        self.report_status = 200
         self.http_calls: list[tuple[str, str]] = []
+        self.http_requests: list[dict[str, Any]] = []
         self.releases: list[dict[str, Any]] = []
         self.state: dict[str, Any] = {}
 
@@ -63,8 +65,12 @@ class FakePlatform:
 
     async def http(self, method: str, url: str, **kwargs: Any) -> tuple[int, Any]:
         self.http_calls.append((method, url))
-        if urlparse(url).hostname == "api.github.com":
+        self.http_requests.append({"method": method, "url": url, **kwargs})
+        hostname = urlparse(url).hostname or ""
+        if hostname == "api.github.com":
             return 200, self.releases
+        if hostname.endswith("sentry.io"):
+            return self.report_status, {}
         if self.reject_actions and method == "POST" and "/api/job" in url:
             raise RuntimeError("printer refused")
         return 200, {"state": self.device_status, "progress": {"completion": 40.0}, "job": {"file": {"name": "benchy.gcode"}}}

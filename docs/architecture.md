@@ -58,8 +58,9 @@ runtime service, extend the Platform contract on both sides.
 
 Commands (UI → engine): `discover`, `camera.add/update/remove`,
 `printer.add/update/remove`, `printer.action`, `printer.test`, `printer.cameras.refresh`,
-`monitor.add/update/remove`, `notify.test`, `settings.update`, `update.check`. Every command
-may carry a `req_id`, echoed on the responding event so the UI can resolve pending requests.
+`monitor.add/update/remove`, `notify.test`, `settings.update`, `update.check`, `report.send`.
+Every command may carry a `req_id`, echoed on the responding event so the UI can resolve
+pending requests.
 
 A **camera** is a video source and a **printer** is a control-service connection
 (OctoPrint/Klipper/Bambu); both are registered resources, created and deleted only in
@@ -76,8 +77,14 @@ own and are dropped with their printer.
 
 Events (engine → UI): a full `state` snapshot (on connect, after every command, and on a
 1 s ticker; it carries the running version and any available update), plus incremental
-`result`, `alert`, `warning`, `device`, `discovered`, `printer_test`, `notify_test` and
-`error` events.
+`result`, `alert`, `warning`, `device`, `discovered`, `printer_test`, `notify_test`,
+`report_sent` and `error` events.
+
+`report.send` is the anonymous bug report ([`engine/reports.py`](../printguard/engine/reports.py)):
+one user-initiated POST of a Sentry feedback envelope — description, optional contact email,
+user-attached files and a diagnostics bundle with every credential redacted — through
+`platform.http`, so it works identically in both modes. There is no SDK and no automatic
+telemetry; nothing is sent unless the user submits a report.
 
 ## The programmatic surface (hub only)
 

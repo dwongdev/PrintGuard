@@ -115,6 +115,20 @@ function GuideChip() {
   );
 }
 
+function ReportChip() {
+  const openDialog = useStore((s) => s.openDialog);
+  return (
+    <button
+      className="chip cursor-pointer hover:opacity-80"
+      title="Report a bug"
+      aria-label="Report a bug"
+      onClick={() => openDialog("report")}
+    >
+      ⚑
+    </button>
+  );
+}
+
 export function Header() {
   const { engine, mode, leaveMode } = useStore();
   const stats = engine?.stats;
@@ -135,6 +149,7 @@ export function Header() {
         <ThemeToggle />
         <CustomiseToggle />
         <GuideChip />
+        <ReportChip />
         <div className="flex-1" />
         {stats && (
           <div className="flex items-center gap-5 md:mr-2">
