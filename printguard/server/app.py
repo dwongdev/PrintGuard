@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import re
 import secrets
@@ -25,6 +26,7 @@ from starlette.background import BackgroundTask
 
 import printguard
 
+from ..engine import logs
 from ..engine.engine import Engine
 from ..pysrc import build_pysrc
 from .api import ApiAuth, build_api_app
@@ -33,6 +35,8 @@ from .mediamtx import EmbeddedMediaMTX
 from .mqtt import MqttBridge
 from .platform import ServerPlatform
 from .publish import ChunkStream, remux
+
+logger = logging.getLogger(__name__)
 
 PACKAGE_ROOT = Path(printguard.__file__).parent
 REPO_ROOT = PACKAGE_ROOT.parent
@@ -58,6 +62,7 @@ def origin_allowed(websocket: WebSocket, allowed: set[str]) -> bool:
 
 def create_app() -> FastAPI:
     """Builds the application with the engine attached to its lifespan."""
+    logs.setup_from_env()
     model_dir = Path(os.environ.get("MODEL_DIR", REPO_ROOT / "models"))
     data_dir = Path(os.environ.get("DATA_DIR", REPO_ROOT / "data"))
     static_dir = Path(os.environ.get("STATIC_DIR", REPO_ROOT / "web" / "dist"))
@@ -75,10 +80,13 @@ def create_app() -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        logger.info("hub starting (data=%s, models=%s, static=%s)", data_dir, model_dir, static_dir)
         streamer = None
         if mediamtx_binary and Path(mediamtx_binary).exists():
             streamer = EmbeddedMediaMTX(mediamtx_binary, mediamtx_config, mediamtx_api)
             await streamer.start()
+        else:
+            logger.warning("no bundled MediaMTX binary (%r) — expecting an external MediaMTX at %s", mediamtx_binary, mediamtx_api)
         platform = ServerPlatform(model_dir, data_dir, mediamtx_api, mediamtx_rtsp, update_asset)
         engine = Engine(platform)
         await engine.start()
@@ -89,6 +97,7 @@ def create_app() -> FastAPI:
         bridge.start()
         async with mcp_app.lifespan(app):
             yield
+        logger.info("hub shutting down")
         await bridge.stop()
         await app.state.hls.aclose()
         await engine.stop()
@@ -113,9 +122,11 @@ def create_app() -> FastAPI:
     async def engine_socket(websocket: WebSocket) -> None:
         """Bridges one UI connection onto the engine protocol."""
         if not origin_allowed(websocket, allowed_origins):
+            logger.warning("rejected cross-origin engine socket (origin=%s)", websocket.headers.get("origin"))
             await websocket.close(code=1008, reason="origin not allowed")
             return
         await websocket.accept()
+        logger.info("UI connected")
         engine: Engine = app.state.engine
         queue: asyncio.Queue = asyncio.Queue(maxsize=256)
 
@@ -136,6 +147,7 @@ def create_app() -> FastAPI:
         except WebSocketDisconnect:
             pass
         finally:
+            logger.info("UI disconnected")
             engine.remove_sink(sink)
             pump_task.cancel()
 
@@ -159,9 +171,11 @@ def create_app() -> FastAPI:
     async def publish_socket(websocket: WebSocket, path: str) -> None:
         """Receives a browser camera recording and republishes it over RTSP."""
         if not re.fullmatch(r"[\w-]+", path) or not origin_allowed(websocket, allowed_origins):
+            logger.warning("rejected publish socket (path=%r, origin=%s)", path, websocket.headers.get("origin"))
             await websocket.close(code=1008, reason="invalid request")
             return
         await websocket.accept()
+        logger.info("camera publish started: %s", path)
         source = ChunkStream()
         pusher = asyncio.create_task(asyncio.to_thread(remux, source, f"{mediamtx_rtsp}/{path}"))
         connected = True
@@ -175,8 +189,10 @@ def create_app() -> FastAPI:
         try:
             await pusher
         except Exception as err:
+            logger.warning("camera publish %s failed: %s", path, err)
             if connected:
                 await websocket.close(code=1011, reason=str(err)[:120])
+        logger.info("camera publish ended: %s", path)
 
     app.mount("/api/v1", api_app)
     app.mount("/mcp", mcp_app)
@@ -187,8 +203,13 @@ def create_app() -> FastAPI:
 
 
 def main() -> None:
-    """Console entry point."""
-    uvicorn.run(create_app(), host="0.0.0.0", port=int(os.environ.get("PORT", "8000")))
+    """Console entry point.
+
+    Uvicorn runs without its own logging config so its records propagate to
+    the root handlers, and without access logs — per-request lines for the
+    HLS polling would drown the tail that bug reports attach.
+    """
+    uvicorn.run(create_app(), host="0.0.0.0", port=int(os.environ.get("PORT", "8000")), log_config=None, access_log=False)
 
 
 if __name__ == "__main__":

@@ -24,11 +24,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import ssl
 from typing import TYPE_CHECKING, Any, Callable
 
 import aiomqtt
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from ..engine.engine import Engine
@@ -333,6 +336,7 @@ class MqttBridge:
             self._reported.clear()
             self._devices.clear()
             self._state = {}
+            logger.info("Home Assistant MQTT bridge connected to %s", config["host"])
             await client.publish(status_topic(base), "online", qos=1, retain=True)
             await client.subscribe(f"{base}/monitor/+/+/set", qos=1)
             self._engine.add_sink(self._sink)

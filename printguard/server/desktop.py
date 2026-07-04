@@ -12,6 +12,7 @@ lifecycle differ from the container entry point in :mod:`printguard.server.app`.
 from __future__ import annotations
 
 import io
+import logging
 import multiprocessing
 import os
 import signal
@@ -26,6 +27,10 @@ import pystray
 import uvicorn
 import webview
 from PIL import Image
+
+from ..engine import logs
+
+logger = logging.getLogger(__name__)
 
 APP_NAME = "PrintGuard"
 BUNDLE_ID = "io.printguard.desktop"
@@ -58,6 +63,7 @@ def _configure_environment() -> None:
     data_dir = Path(platformdirs.user_data_dir(APP_NAME, APP_NAME))
     data_dir.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("DATA_DIR", str(data_dir))
+    os.environ.setdefault("LOG_FILE", str(data_dir / "printguard.log"))
     os.environ.setdefault(
         "UPDATE_ASSET", "PrintGuard-macos-arm64.dmg" if sys.platform == "darwin" else "PrintGuard-windows-x64.zip"
     )
@@ -138,7 +144,8 @@ class _Server:
     def __init__(self, port: int) -> None:
         from .app import create_app
 
-        config = uvicorn.Config(create_app(), host="0.0.0.0", port=port, log_level="warning")
+        self._port = port
+        config = uvicorn.Config(create_app(), host="0.0.0.0", port=port, log_config=None, access_log=False)
         self._server = uvicorn.Server(config)
         self._server.install_signal_handlers = lambda: None
         self._thread = threading.Thread(target=self._server.run, daemon=True)
@@ -149,9 +156,11 @@ class _Server:
         deadline = time.monotonic() + READY_TIMEOUT_S
         while time.monotonic() < deadline and not self._server.started:
             time.sleep(0.1)
+        logger.info("hub server %s on :%d", "listening" if self._server.started else "did not start", self._port)
 
     def stop(self) -> None:
         """Asks the server to exit and waits for the thread to finish."""
+        logger.info("hub server stopping")
         self._server.should_exit = True
         self._thread.join(timeout=STOP_TIMEOUT_S)
 
@@ -228,6 +237,7 @@ def _watch_termination(window: _Window, server: _Server) -> None:
         watched = {int(signal.SIGTERM), int(signal.SIGINT)}
         while received.recv(1)[0] not in watched:
             pass
+        logger.info("termination signal received — shutting down")
         notify.close()
         window.close()
         server.stop()
@@ -285,6 +295,8 @@ def main() -> None:
     server running so the printer stays watched, and the tray's Quit exits.
     """
     _configure_environment()
+    logs.setup_from_env()
+    logger.info("desktop app starting (frozen=%s, data=%s)", getattr(sys, "frozen", False), os.environ["DATA_DIR"])
     port = int(os.environ.get("PORT", "8000"))
     server = _Server(port)
     server.start()
@@ -300,6 +312,7 @@ def main() -> None:
         _set_autostart(not _autostart_enabled())
 
     def quit_app(icon: pystray.Icon, item: pystray.MenuItem) -> None:
+        logger.info("quit from tray")
         window.close()
         server.stop()
         icon.stop()

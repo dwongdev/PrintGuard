@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { recentLogs } from "../log";
 import { useStore } from "../store";
 import { Dialog } from "./Dialog";
 
@@ -59,6 +60,7 @@ export function ReportDialog() {
         user_agent: navigator.userAgent,
         viewport: `${window.innerWidth}x${window.innerHeight}`,
       },
+      logs: recentLogs(),
       attachments: attachments.map(({ name, type, data }) => ({ name, type, data })),
     });
 
@@ -124,7 +126,8 @@ export function ReportDialog() {
           <p className="mt-1.5 leading-relaxed">
             Your description, any files you attach, and a diagnostics bundle: the app version and platform, your
             camera, printer, monitor and notification configuration with every credential removed, performance
-            stats, and recent errors and warnings. No camera frames are included unless you attach them yourself.
+            stats, recent errors and warnings, and the app's recent logs — also scrubbed of credentials. No
+            camera frames are included unless you attach them yourself.
           </p>
         </details>
         {reportResult && !reportResult.ok && (

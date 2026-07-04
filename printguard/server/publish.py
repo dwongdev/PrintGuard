@@ -8,12 +8,15 @@ like any other MediaMTX stream and reaches viewers as HLS.
 
 from __future__ import annotations
 
+import logging
 import queue
 import time
 from fractions import Fraction
 
 import av
 from av.video.frame import PictureType
+
+logger = logging.getLogger(__name__)
 
 
 class ChunkStream:
@@ -119,6 +122,6 @@ class H264Push:
             for packet in self._stream.encode(None):
                 self._push.mux(packet)
         except Exception:
-            pass
+            logger.debug("encoder flush failed on close", exc_info=True)
         self._push.close()
         self._push = None

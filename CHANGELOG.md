@@ -37,6 +37,14 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   recent errors and warnings) with **every credential stripped**, and no camera frames unless
   you attach them yourself. Nothing is ever sent unless you submit a report.
 
+- **Everything leaves a trace.** The hub now logs its whole lifecycle — boot, camera
+  attach/drop, printer actions, alerts, rejected API and socket attempts — to `docker logs`,
+  and the desktop app writes a self-rotating `printguard.log` beside its data, so problems on
+  a computer with no terminal can still be diagnosed. Bug reports automatically attach the
+  recent engine and interface logs, scrubbed of every credential, so a report carries the
+  story leading up to the bug. Set `LOG_LEVEL=DEBUG` for deeper traces when asked during
+  support.
+
 - **A detection history for every monitor.** Open a monitor's detail page to see its defect risk
   charted over selectable periods, alongside a snapshot of every alert it fired — what the camera
   saw at the moment PrintGuard acted.
