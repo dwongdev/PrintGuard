@@ -429,8 +429,8 @@ async def test_report_send_redacts_credentials_and_posts_feedback() -> None:
 
     sent = [e for e in events if e.get("event") == "report_sent"]
     assert sent and sent[0]["ok"] and sent[0]["req_id"] == 9
-    request = next(r for r in platform.http_requests if "sentry.io" in r["url"])
-    assert request["url"] == reports.envelope_endpoint(reports.SENTRY_DSN)
+    endpoint = reports.envelope_endpoint(reports.SENTRY_DSN)
+    request = next(r for r in platform.http_requests if r["url"] == endpoint)
     assert request["headers"]["Content-Type"] == "application/x-sentry-envelope"
     lines = request["data"].split(b"\n")
     assert json.loads(lines[1]) == {"type": "feedback"}
