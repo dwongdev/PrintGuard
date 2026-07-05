@@ -53,6 +53,13 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   consecutive-detections sliders carry inline hints on what each one does and which way to move
   it.
 
+### Fixed
+
+- Registering a camera could report "no frames" even though the stream was healthy — the hub
+  gave a source eight seconds to produce a frame, which a freshly published "this device"
+  camera or a slow-starting stream often exceeds. Registration now waits out a cold start
+  before giving up.
+
 ## [2.2.2] - 2026-06-26
 
 ### Fixed

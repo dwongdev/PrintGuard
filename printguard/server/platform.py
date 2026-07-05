@@ -27,7 +27,7 @@ from .publish import H264Push
 
 FPS_SAMPLE_FRAMES = 25
 MEASURE_WARMUP_S = 1.0
-OPEN_WAIT_S = 8.0
+OPEN_WAIT_S = 25.0
 RECONNECT_DELAY_S = 3.0
 MJPEG_LIVE_OPTIONS = {"analyzeduration": "0", "probesize": "32"}
 
@@ -181,6 +181,12 @@ class ServerPlatform:
         RTSP/RTMP URLs are pulled by MediaMTX; HTTP/MJPEG ones, which it cannot
         pull, are read directly and transcoded back into MediaMTX so both
         inference and viewers see them.
+
+        The wait must outlast a freshly published path's cold start: the remux
+        announcing the track, a not-found retry, the demuxer probe, a mid-GOP
+        join and — when the container declares no rate — measuring the fps.
+        Together those approach twenty seconds; sources that are truly dead
+        just take this long to report.
         """
         publish_url: str | None = None
         target: str | Callable[[], Any]
