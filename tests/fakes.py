@@ -69,7 +69,7 @@ class FakePlatform:
         hostname = urlparse(url).hostname or ""
         if hostname == "api.github.com":
             return 200, self.releases
-        if hostname.endswith("sentry.io"):
+        if hostname == "sentry.io" or hostname.endswith(".sentry.io"):
             return self.report_status, {}
         if self.reject_actions and method == "POST" and "/api/job" in url:
             raise RuntimeError("printer refused")
