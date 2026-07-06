@@ -109,13 +109,17 @@ def _run_webview(url: str) -> None:
     """Child-process entry point: shows the hub in a native window.
 
     The window owns its process's main thread, so it never contends with the
-    tray's, and closing it ends only this process.
+    tray's, and closing it ends only this process. The webview must keep its
+    website data between windows — pywebview's default private mode erases
+    localStorage on every launch (on macOS it wipes the whole store), which
+    would lose the page's record of which "this device" cameras it publishes,
+    so a reopened window would never resume them.
     """
     if sys.platform == "darwin":
         _enable_wkwebview_camera()
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
     webview.create_window(APP_NAME, url, width=1280, height=820)
-    webview.start()
+    webview.start(private_mode=False, storage_path=os.path.join(os.environ["DATA_DIR"], "webview"))
 
 
 class _Window:
