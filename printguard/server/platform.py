@@ -4,7 +4,11 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
+import re
+import subprocess
+import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -28,8 +32,181 @@ from .publish import H264Push
 FPS_SAMPLE_FRAMES = 25
 MEASURE_WARMUP_S = 1.0
 OPEN_WAIT_S = 25.0
+CAMERA_CONSENT_WAIT_S = 60.0
 RECONNECT_DELAY_S = 3.0
 MJPEG_LIVE_OPTIONS = {"analyzeduration": "0", "probesize": "32"}
+DEVICE_OPEN_OPTIONS = ({"framerate": "30"}, {"framerate": "15"}, {})
+"""Frame rates tried, most common first, when a device's own capture formats
+cannot be read ahead of time (Windows/Linux); macOS pins a real size and rate
+from AVFoundation in _device_open_options."""
+DEVICE_SIZE_CAP = 1280 * 720
+DEVICE_PIXEL_FORMATS = {"420v": "nv12", "420f": "nv12", "yuvs": "yuyv422", "2vuy": "uyvy422"}
+"""AVFoundation format subtypes mapped to ffmpeg pixel formats. avfoundation
+defaults to yuv420p, which it silently downgrades to the packed uyvy422 formats
+— often capped to a few fps — so the biplanar nv12 formats that carry a device's
+full frame rate are requested by name instead."""
+
+logger = logging.getLogger(__name__)
+
+
+def _video_devices() -> list[tuple[str, str]]:
+    """Names the host's attachable video capture devices as (device_id, label).
+
+    libavdevice only exposes device discovery through its log stream, so the
+    names are parsed from a capture of the listing call's messages, raised to
+    INFO for the duration. Screens are excluded — a capture of the host's own
+    display is never a printer camera. Listing needs no camera permission;
+    only opening a device does.
+    """
+    if sys.platform.startswith("linux"):
+        devices = []
+        for node in sorted(Path("/dev").glob("video*")):
+            name_file = Path("/sys/class/video4linux") / node.name / "name"
+            try:
+                devices.append((str(node), name_file.read_text().strip()))
+            except OSError:
+                devices.append((str(node), node.name))
+        return devices
+    import av.logging
+
+    spec, container_format = ("", "avfoundation") if sys.platform == "darwin" else ("video=dummy", "dshow")
+    previous = av.logging.get_level()
+    av.logging.set_level(av.logging.INFO)
+    try:
+        with av.logging.Capture(local=True) as logs:
+            try:
+                av.open(spec, format=container_format, options={"list_devices": "true"})
+            except OSError:
+                pass
+    finally:
+        av.logging.set_level(previous)
+    logger.debug("device listing captured %d lines: %r", len(logs), [message for _lv, _n, message in logs])
+    names: list[str] = []
+    in_video_section = False
+    for _level, _name, message in logs:
+        line = message.strip()
+        if sys.platform == "darwin":
+            if line.endswith("video devices:"):
+                in_video_section = True
+            elif line.endswith("audio devices:"):
+                in_video_section = False
+            elif in_video_section and (match := re.match(r"\[\d+\] (.+)", line)) and not match[1].startswith("Capture screen"):
+                names.append(match[1])
+        elif match := re.match(r'"(.+)" \(video', line):
+            names.append(match[1])
+    return [(name, name) for name in names]
+
+
+def _device_input(device_id: str) -> tuple[str, str]:
+    """Maps a video device to the host's libavdevice demuxer and input string."""
+    if sys.platform == "darwin":
+        return "avfoundation", device_id
+    if sys.platform == "win32":
+        return "dshow", f"video={device_id}"
+    return "v4l2", device_id
+
+
+def _device_open_options(device_id: str) -> tuple[dict[str, str], ...]:
+    """Capture options to try when opening a device, most specific first.
+
+    ffmpeg's avfoundation ignores the requested frame rate when no size is given
+    and settles on the device's last-listed format — routinely its top
+    resolution pinned to a handful of fps — so 30/15fps requests come back as
+    EAGAIN. On macOS the real formats are read from AVFoundation and the largest
+    size within a sane cap that offers a usable rate is pinned explicitly; other
+    platforms negotiate over common frame rates.
+    """
+    if sys.platform != "darwin":
+        return DEVICE_OPEN_OPTIONS
+    import objc
+    from Foundation import NSBundle
+
+    NSBundle.bundleWithPath_("/System/Library/Frameworks/AVFoundation.framework").load()
+    capture_device = objc.lookUpClass("AVCaptureDevice")
+    device = next((d for d in capture_device.devicesWithMediaType_("vide") if d.localizedName() == device_id), None)
+    if device is None:
+        return DEVICE_OPEN_OPTIONS
+    modes: list[tuple[int, int, int, str]] = []
+    for fmt in device.formats():
+        description = str(fmt.description())
+        size = re.search(r"(\d+)x(\d+),\s*\{", description)
+        subtype = re.search(r"'vide'/'(\w{4})'", description)
+        rate = max((float(r.maxFrameRate()) for r in fmt.videoSupportedFrameRateRanges()), default=0.0)
+        pixel_format = DEVICE_PIXEL_FORMATS.get(subtype[1]) if subtype else None
+        if size and rate > 0 and pixel_format:
+            modes.append((int(size[1]), int(size[2]), min(int(rate), 30), pixel_format))
+    if not modes:
+        return DEVICE_OPEN_OPTIONS
+    within_cap = [mode for mode in modes if mode[0] * mode[1] <= DEVICE_SIZE_CAP] or modes
+    width, height, framerate, pixel_format = max(within_cap, key=lambda mode: (mode[2], mode[0] * mode[1]))
+    pinned = {"video_size": f"{width}x{height}", "framerate": str(framerate), "pixel_format": pixel_format}
+    return (pinned, {"framerate": str(framerate)}, {})
+
+
+def _macos_capture_input_usable(objc_module: Any, capture_device: Any) -> bool:
+    """Whether an authorised-looking consent state actually permits capture.
+
+    Creating a capture input is the very call libavdevice fails on when a
+    recorded grant no longer matches this build's code signature. It starts
+    no session, so probing never lights the camera-active indicator.
+    """
+    device = capture_device.defaultDeviceWithMediaType_("vide")
+    if device is None:
+        return True
+    objc_module.registerMetaDataForSelector(
+        b"AVCaptureDeviceInput", b"deviceInputWithDevice:error:", {"arguments": {3: {"type_modifier": b"o"}}}
+    )
+    created, _error = objc_module.lookUpClass("AVCaptureDeviceInput").deviceInputWithDevice_error_(device, None)
+    return created is not None
+
+
+def _authorize_macos_camera() -> None:
+    """Settles the macOS camera-consent state, raising when capture is refused.
+
+    libavdevice never raises the consent prompt: opening a device while consent
+    is undetermined starts a session that delivers no frames, and once refused
+    the capture input fails instantly with EAGAIN. So consent is settled through
+    AVFoundation first, blocking until the user answers. A grant recorded for a
+    previous build still reads as authorised while capture is refused — each
+    unsigned build re-signs ad hoc with a new identity — so an authorised state
+    is probed with a real capture input, and a refusal resets this app's own
+    consent entry to let the prompt be asked afresh. Other platforms gate
+    camera capture without a per-process consent step.
+    """
+    if sys.platform != "darwin":
+        return
+    import objc
+    from Foundation import NSBundle
+
+    NSBundle.bundleWithPath_("/System/Library/Frameworks/AVFoundation.framework").load()
+    capture_device = objc.lookUpClass("AVCaptureDevice")
+    status = capture_device.authorizationStatusForMediaType_("vide")
+    if status == 3:
+        if _macos_capture_input_usable(objc, capture_device):
+            return
+        bundle_id = NSBundle.mainBundle().bundleIdentifier()
+        if bundle_id:
+            subprocess.run(["tccutil", "reset", "Camera", str(bundle_id)], check=False, capture_output=True)
+        status = capture_device.authorizationStatusForMediaType_("vide")
+    if status == 0:
+        objc.registerMetaDataForSelector(
+            b"AVCaptureDevice",
+            b"requestAccessForMediaType:completionHandler:",
+            {"arguments": {3: {"callable": {"retval": {"type": b"v"}, "arguments": {0: {"type": b"^v"}, 1: {"type": b"Z"}}}}}},
+        )
+        answered = threading.Event()
+        granted: list[bool] = [False]
+
+        def record(allowed: bool) -> None:
+            granted[0] = bool(allowed)
+            answered.set()
+
+        capture_device.requestAccessForMediaType_completionHandler_("vide", record)
+        if answered.wait(CAMERA_CONSENT_WAIT_S) and granted[0]:
+            return
+    raise RuntimeError(
+        "macOS camera access is not granted — allow PrintGuard under System Settings → Privacy & Security → Camera"
+    )
 
 
 class AVSource:
@@ -42,11 +219,20 @@ class AVSource:
     MediaMTX cannot pull itself reach viewers as HLS.
     """
 
-    def __init__(self, source: str | Callable[[], Any], publish_url: str | None = None) -> None:
+    def __init__(
+        self,
+        source: str | Callable[[], Any],
+        publish_url: str | None = None,
+        container_format: str | None = None,
+        open_options: tuple[dict[str, str], ...] | None = None,
+    ) -> None:
         self._source = source
         self._publish_url = publish_url
+        self._container_format = container_format
+        self._open_options = open_options or DEVICE_OPEN_OPTIONS
         self.fps = 0.0
         self.online = False
+        self.last_error: str | None = None
         self._latest: Frame | None = None
         self._seq = 0
         self._stop = False
@@ -63,6 +249,14 @@ class AVSource:
         if not isinstance(self._source, str):
             pipe = self._source()
             return av.open(pipe, format="mjpeg", options=MJPEG_LIVE_OPTIONS), pipe
+        if self._container_format is not None:
+            last: Exception | None = None
+            for options in self._open_options:
+                try:
+                    return av.open(self._source, format=self._container_format, options=options, timeout=5.0), None
+                except OSError as exc:
+                    last = exc
+            raise last if last else RuntimeError(f"could not open {self._source!r}")
         options = {}
         if self._source.startswith("rtsp://"):
             options["rtsp_transport"] = "tcp"
@@ -72,6 +266,7 @@ class AVSource:
 
     def _run(self) -> None:
         while not self._stop:
+            container: Any = None
             push: H264Push | None = None
             pipe: Any = None
             try:
@@ -83,11 +278,36 @@ class AVSource:
                 if self._publish_url:
                     rate = stream.guessed_rate or stream.average_rate
                     push = H264Push(self._publish_url, int(rate) if rate and 0 < rate <= 60 else 15)
-                warmup_until = time.monotonic() + MEASURE_WARMUP_S
-                samples: list[float] = []
+                self._decode(container, stream, push)
+            except Exception as exc:
+                self.last_error = str(exc)
+                logger.debug("camera source %r read failed: %s", self._source, exc)
+            finally:
+                if container is not None:
+                    container.close()
+                if push is not None:
+                    push.close()
+                if pipe is not None:
+                    pipe.close()
+            self.online = False
+            if not self._stop:
+                time.sleep(RECONNECT_DELAY_S)
+
+    def _decode(self, container: Any, stream: Any, push: H264Push | None) -> None:
+        """Keeps the freshest frame until the source ends, transcoding if asked.
+
+        A capture device announces its stream before a frame is buffered, so the
+        first reads — and any gap between frames — surface as EAGAIN. That is not
+        a disconnect: the open session is kept and the read retried, rather than
+        torn down and reconnected as a network drop would be.
+        """
+        warmup_until = time.monotonic() + MEASURE_WARMUP_S
+        samples: list[float] = []
+        while not self._stop:
+            try:
                 for frame in container.decode(stream):
                     if self._stop:
-                        break
+                        return
                     self._seq += 1
                     self._latest = Frame(rgb=frame.to_ndarray(format="rgb24"), seq=float(self._seq), ts=time.time())
                     self.online = True
@@ -97,17 +317,9 @@ class AVSource:
                         samples.append(time.monotonic())
                         if len(samples) == FPS_SAMPLE_FRAMES and samples[-1] > samples[0]:
                             self.fps = max(1.0, min(60.0, (len(samples) - 1) / (samples[-1] - samples[0])))
-                container.close()
-            except Exception:
-                pass
-            finally:
-                if push is not None:
-                    push.close()
-                if pipe is not None:
-                    pipe.close()
-            self.online = False
-            if not self._stop:
-                time.sleep(RECONNECT_DELAY_S)
+                return
+            except av.error.BlockingIOError:
+                time.sleep(0.02)
 
     async def grab(self) -> Frame | None:
         """Returns the freshest decoded frame without copying."""
@@ -168,19 +380,24 @@ class ServerPlatform:
         return await asyncio.get_running_loop().run_in_executor(self._executor, self._infer_sync, rgb)
 
     async def discover_cameras(self) -> list[dict[str, Any]]:
-        """Lists active MediaMTX paths as attachable sources."""
+        """Lists the host's video devices and active MediaMTX paths as attachable sources."""
+        devices = await asyncio.to_thread(_video_devices)
+        sources: list[dict[str, Any]] = [{"kind": "device", "device_id": device_id, "label": label} for device_id, label in devices]
         try:
             paths = await self.mediamtx.list_paths()
         except Exception:
-            return []
-        return [{"kind": "path", "path": name, "label": name} for name in paths]
+            return sources
+        return sources + [{"kind": "path", "path": name, "label": name} for name in paths]
 
     async def open_camera(self, camera_id: str, source: dict[str, Any]) -> AVSource:
         """Attaches to a stream, getting URL sources into MediaMTX for viewers.
 
         RTSP/RTMP URLs are pulled by MediaMTX; HTTP/MJPEG ones, which it cannot
         pull, are read directly and transcoded back into MediaMTX so both
-        inference and viewers see them.
+        inference and viewers see them. Device sources are the host's own
+        cameras, captured through libavdevice in this process — not a browser
+        page — so on the desktop app they keep watching with every window
+        closed; they are republished the same way.
 
         The wait must outlast a freshly published path's cold start: the remux
         announcing the track, a not-found retry, the demuxer probe, a mid-GOP
@@ -189,8 +406,15 @@ class ServerPlatform:
         just take this long to report.
         """
         publish_url: str | None = None
+        container_format: str | None = None
+        open_options: tuple[dict[str, str], ...] | None = None
         target: str | Callable[[], Any]
-        if source["kind"] == "url":
+        if source["kind"] == "device":
+            await asyncio.to_thread(_authorize_macos_camera)
+            container_format, target = _device_input(source["device_id"])
+            open_options = await asyncio.to_thread(_device_open_options, source["device_id"])
+            publish_url = self.mediamtx.rtsp_url(camera_id)
+        elif source["kind"] == "url":
             source_url = source["url"]
             if source_url.startswith(("http://", "https://")):
                 target = source_url
@@ -205,14 +429,15 @@ class ServerPlatform:
             publish_url = self.mediamtx.rtsp_url(camera_id)
         else:
             raise ValueError(f"hub mode cannot open source kind {source['kind']!r}")
-        av_source = AVSource(target, publish_url)
+        av_source = AVSource(target, publish_url, container_format, open_options)
         deadline = time.monotonic() + OPEN_WAIT_S
         while time.monotonic() < deadline and not (av_source.online and av_source.fps > 0):
             await asyncio.sleep(0.2)
         if not av_source.online:
             av_source.close()
             await self.release_camera(camera_id, source)
-            raise RuntimeError(f"no frames from camera {camera_id}")
+            detail = f": {av_source.last_error}" if av_source.last_error else ""
+            raise RuntimeError(f"no frames from camera {camera_id}{detail}")
         return av_source
 
     async def release_camera(self, camera_id: str, source: dict[str, Any]) -> None:

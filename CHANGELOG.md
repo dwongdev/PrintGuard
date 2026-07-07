@@ -13,8 +13,11 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 
 - **A desktop app for macOS and Windows — run a hub as an application.** PrintGuard now ships as a
   native app that runs the full hub from your menu bar / system tray. Close the window and the hub
-  keeps watching, so it covers the multi-hour prints that matter; quit from the tray. Reach it from
-  your phone on the same network at `http://<computer>:8000`. Detection still runs entirely on
+  keeps watching, so it covers the multi-hour prints that matter; quit from the tray. The computer's
+  own webcams register straight on the hub — the app's window offers them under **Cameras →
+  This device**, and macOS asks for camera access the first time you register one — so they
+  keep watching with every window closed (Linux Docker hubs can still attach mapped
+  `/dev/video*` devices through the API). Reach it from your phone on the same network at `http://<computer>:8000`. Detection still runs entirely on
   your own machine; no frame leaves your hardware. Turn on **Start at login** and forget about it.
   Download it from the landing page or the
   [Releases page](https://github.com/oliverbravery/PrintGuard/releases) — the builds are unsigned for

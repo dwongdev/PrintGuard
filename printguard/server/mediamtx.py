@@ -88,7 +88,12 @@ class EmbeddedMediaMTX:
 
     async def _run(self) -> None:
         while not self._stopping:
-            self._process = await asyncio.create_subprocess_exec(self._binary, self._config)
+            try:
+                self._process = await asyncio.create_subprocess_exec(self._binary, self._config)
+            except OSError as exc:
+                logger.error("MediaMTX failed to launch (%s); retrying", exc)
+                await asyncio.sleep(RESTART_DELAY_S)
+                continue
             code = await self._process.wait()
             if self._stopping:
                 return

@@ -215,8 +215,9 @@ function DevicePicker({ onAdd }: { onAdd: (name: string, source: CameraSource) =
 }
 
 function HubAdd({ onDone }: { onDone: () => void }) {
-  const { send, toast, discovered, discovering, discover, isPending } = useStore();
-  const [tab, setTab] = useState<"url" | "publish" | "paths">("url");
+  const { send, toast, isPending } = useStore();
+  const desktopApp = "pywebview" in window;
+  const [tab, setTab] = useState<"url" | "publish">("url");
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]);
@@ -224,8 +225,7 @@ function HubAdd({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (tab === "paths") discover();
-    if (tab === "publish") {
+    if (tab === "publish" && !desktopApp) {
       listVideoInputs()
         .then(setDevices)
         .catch((err) => toast("error", `camera access: ${err instanceof Error ? err.message : err}`));
@@ -252,10 +252,9 @@ function HubAdd({ onDone }: { onDone: () => void }) {
     }
   };
 
-  const tabs: Array<["url" | "publish" | "paths", string]> = [
+  const tabs: Array<["url" | "publish", string]> = [
     ["url", "Stream URL"],
     ["publish", "This device"],
-    ["paths", "Discovered"],
   ];
   return (
     <div>
@@ -291,7 +290,21 @@ function HubAdd({ onDone }: { onDone: () => void }) {
           </button>
         </div>
       )}
-      {tab === "publish" && (
+      {tab === "publish" && desktopApp && (
+        <div className="space-y-3">
+          <p className="text-xs text-text-1">
+            This computer's cameras register on the hub itself, so they keep watching from the tray
+            with every window closed.
+          </p>
+          <DevicePicker
+            onAdd={(name, source) => {
+              send({ cmd: "camera.add", name, source });
+              onDone();
+            }}
+          />
+        </div>
+      )}
+      {tab === "publish" && !desktopApp && (
         <div className="space-y-3">
           <p className="text-xs text-text-1">
             Streams this device's camera to the hub. It reconnects if the hub restarts and resumes
@@ -309,29 +322,6 @@ function HubAdd({ onDone }: { onDone: () => void }) {
           <button className="btn btn-primary w-full" disabled={!deviceId || busy || isPending("camera.add")} onClick={publish}>
             {busy ? "Publishing…" : isPending("camera.add") ? "Registering…" : "Publish & register"}
           </button>
-        </div>
-      )}
-      {tab === "paths" && (
-        <div className="space-y-2">
-          {discovering && <p className="mono text-[0.7rem] text-text-2 boot-cursor">querying mediamtx</p>}
-          {!discovering && !(discovered ?? []).length && (
-            <p className="mono text-[0.7rem] text-text-2">no unregistered streams on the hub</p>
-          )}
-          {(discovered ?? []).map((s) => (
-            <div key={s.path} className="flex items-center gap-3 panel px-3 py-2">
-              <span className="mono text-[0.72rem] flex-1 truncate">{s.path}</span>
-              <button
-                className="btn !py-1 !px-2.5 !text-[0.62rem]"
-                disabled={isPending("camera.add")}
-                onClick={() => {
-                  send({ cmd: "camera.add", name: s.path!, source: { kind: "path", path: s.path } });
-                  onDone();
-                }}
-              >
-                {isPending("camera.add") ? "Registering…" : "Register"}
-              </button>
-            </div>
-          ))}
         </div>
       )}
     </div>
