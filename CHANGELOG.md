@@ -63,6 +63,12 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   consecutive-detections sliders carry inline hints on what each one does and which way to move
   it.
 
+- **The `/api/v1` read surface now describes its response bodies.** PrintGuard's API reference
+  (`docs/api.md`) documents the camera and monitor object shapes — including where a camera's
+  failure signal lives (`last_result.prediction`), since the smoothed 0–1 defect score is a
+  per-monitor quantity, not a field on the camera. The camera and monitor routes now carry
+  response schemas too, so the interactive `/api/v1/docs` shows the shapes instead of empty bodies.
+
 ### Fixed
 
 - Registering a camera could report "no frames" even though the stream was healthy — the hub
