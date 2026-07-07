@@ -26,6 +26,10 @@ class Adapter(ABC):
             Adapters needing a transport the browser sandbox forbids — a
             raw socket, or HTTP to a service without CORS headers — set
             this False and are offered in hub mode only.
+        desktop_only: Whether the adapter runs only in the desktop app (the
+            hub packaged as a native window), where it can reach a service the
+            headless container and the browser cannot — a local OS call. Set
+            this True and it is offered only when the UI runs inside that app.
         experimental: Whether the adapter is new and not yet battle-tested;
             the config form flags it so users know to expect rough edges.
         setup_url: Optional link to a user-facing setup guide, shown in the
@@ -42,6 +46,7 @@ class Adapter(ABC):
     label: str
     docs_url: str
     browser_ok: bool = True
+    desktop_only: bool = False
     experimental: bool = False
     setup_url: str | None = None
     setup_hint: str | None = None
@@ -54,6 +59,7 @@ class Adapter(ABC):
             "label": self.label,
             "docs_url": self.docs_url,
             "browser_ok": self.browser_ok,
+            "desktop_only": self.desktop_only,
             "experimental": self.experimental,
             "setup_url": self.setup_url,
             "setup_hint": self.setup_hint,

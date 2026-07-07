@@ -25,6 +25,13 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   Windows. On Linux, run the Docker hub as before. When a newer version ships, the update dialog
   offers the right download for your computer; the Docker hub keeps its pull instructions.
 
+- **Native notifications on the desktop app.** The macOS and Windows desktop app can now post
+  defect alerts to the operating system's own notification centre — with the snapshot attached —
+  so a native banner reaches you even with the window closed and no phone app set up. Turn on
+  **Desktop notification** under **Settings → Alerts** (it is offered only inside the desktop app,
+  next to ntfy, Telegram and Discord); on macOS, allow notifications for PrintGuard the first time
+  it asks. The Docker hub, which has no desktop of its own, keeps using the push channels.
+
 - **Prusa printers now connect over PrusaLink.** Register a Prusa printer — MK4, MK4S, MK3.9,
   MK3.5, MINI, XL, CORE One, or an MK3/MK2.5 running PrusaLink on a Raspberry Pi — alongside
   OctoPrint, Klipper and Bambu. PrintGuard reads its job, progress and state, gates inference

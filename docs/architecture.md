@@ -32,7 +32,7 @@ flowchart LR
 
     server --- mediamtx["MediaMTX<br/>RTSP / RTMP / HLS"]
     integrations --- printersvc["OctoPrint / Moonraker / Bambu Lab"]
-    notifiers --- push["ntfy / Telegram / Discord"]
+    notifiers --- push["ntfy / Telegram / Discord / native"]
 ```
 
 ## The platform contract
@@ -201,7 +201,7 @@ printguard/
     printers.py      registered-printer (integration connection) validation
     watchdog.py      defect response: streaks, printer actions, notifications, health
     integrations/    printer service adapters (OctoPrint, Klipper, Bambu Lab, …)
-    notifiers/       alert channel adapters (ntfy, Telegram, Discord, …)
+    notifiers/       alert channel adapters (ntfy, Telegram, Discord, native desktop, …)
     adapters.py      shared adapter contract (id, label, docs_url, JSON-schema config)
   server/            hub platform: FastAPI, bundled MediaMTX (child process), LiteRT, PyAV
     api.py           REST API (/api/v1) over the engine protocol, scoped by token

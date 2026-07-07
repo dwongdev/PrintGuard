@@ -114,8 +114,8 @@ as the container, in a native window on (and never leaving) your own computer.
 
 Register your printer — OctoPrint, Klipper (Moonraker), Prusa (PrusaLink) or Bambu Lab — bind it to a monitor,
 and choose what a sustained defect does: alert, pause or cancel. If a printer exposes a webcam,
-PrintGuard adds it as a camera for you. Turn on ntfy, Telegram or Discord in **Settings** to
-get snapshot alerts and watchdog warnings.
+PrintGuard adds it as a camera for you. Turn on ntfy, Telegram, Discord, or (in the desktop app)
+native OS notifications in **Settings** to get snapshot alerts and watchdog warnings.
 
 Connecting over Docker or HTTPS, or linking a Bambu printer, has a few gotchas — the full
 walk-through (and webcam/camera options) lives in **[docs/printers.md](docs/printers.md)**.

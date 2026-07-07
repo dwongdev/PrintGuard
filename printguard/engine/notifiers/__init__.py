@@ -12,11 +12,12 @@ from typing import Any
 
 from .base import NotifierAdapter
 from .discord import DiscordNotifier
+from .native import NativeNotifier
 from .ntfy import NtfyNotifier
 from .telegram import TelegramNotifier
 
 NOTIFIERS: dict[str, NotifierAdapter] = {
-    adapter.id: adapter for adapter in (NtfyNotifier(), TelegramNotifier(), DiscordNotifier())
+    adapter.id: adapter for adapter in (NtfyNotifier(), TelegramNotifier(), DiscordNotifier(), NativeNotifier())
 }
 
 

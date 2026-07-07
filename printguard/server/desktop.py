@@ -74,6 +74,23 @@ def _configure_environment() -> None:
     os.environ.setdefault("STATIC_DIR", str(bundle / "static"))
     os.environ.setdefault("MEDIAMTX_CONFIG", str(bundle / "mediamtx.yml"))
     os.environ.setdefault("MEDIAMTX_BINARY", str(bundle / ("mediamtx.exe" if os.name == "nt" else "mediamtx")))
+    if sys.platform == "win32":
+        os.environ.setdefault("APP_ICON", str(bundle / "icon.png"))
+
+
+def _set_windows_app_id() -> None:
+    """Ties this process to a stable AppUserModelID so Windows attributes its toasts.
+
+    Windows groups a program's taskbar entry and its toast notifications by AppUserModelID;
+    a frozen Python process has none of its own, so the desktop notifier's toasts would appear
+    under a generic identity. Pinning it to the app name — the same id desktop-notifier registers
+    the app icon against — gives those toasts PrintGuard's name and icon.
+    """
+    if sys.platform != "win32":
+        return
+    import ctypes
+
+    ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(ctypes.c_wchar_p(APP_NAME))
 
 
 def _enable_wkwebview_camera() -> None:
@@ -299,6 +316,7 @@ def main() -> None:
     server running so the printer stays watched, and the tray's Quit exits.
     """
     _configure_environment()
+    _set_windows_app_id()
     logs.setup_from_env()
     logger.info("desktop app starting (frozen=%s, data=%s)", getattr(sys, "frozen", False), os.environ["DATA_DIR"])
     port = int(os.environ.get("PORT", "8000"))

@@ -42,14 +42,22 @@ hiddenimports = (
     + collect_submodules("av")
     + collect_submodules("fastmcp.server")
     + collect_submodules("mcp.server")
+    + collect_submodules("desktop_notifier")
     + ["ai_edge_litert.interpreter"]
 )
+
+if sys.platform == "darwin":
+    hiddenimports += collect_submodules("rubicon")
 
 if sys.platform == "win32":
     clr_datas, clr_binaries, clr_hidden = collect_all("clr_loader")
     datas += clr_datas + copy_metadata("pythonnet")
     binaries += clr_binaries
     hiddenimports += clr_hidden + ["clr"]
+    winrt_datas, winrt_binaries, winrt_hidden = collect_all("winrt")
+    datas += winrt_datas
+    binaries += winrt_binaries
+    hiddenimports += winrt_hidden
 
 a = Analysis(
     [str(Path(SPECPATH) / "desktop_entry.py")],

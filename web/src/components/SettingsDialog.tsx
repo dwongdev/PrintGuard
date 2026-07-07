@@ -76,7 +76,10 @@ export function SettingsDialog() {
     applyTheme(editing.id, upsertTheme(themes, editing), true);
   }, [editing]);
 
-  const channels = (engine?.notifiers ?? []).filter((n) => engine?.mode === "hub" || n.browser_ok);
+  const desktopApp = "pywebview" in window;
+  const channels = (engine?.notifiers ?? []).filter(
+    (n) => (engine?.mode === "hub" || n.browser_ok) && (!n.desktop_only || desktopApp),
+  );
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "appearance", label: "Appearance" },

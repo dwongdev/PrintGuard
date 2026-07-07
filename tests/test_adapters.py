@@ -123,6 +123,35 @@ async def test_discord_raises_on_rejection() -> None:
         await NOTIFIERS["discord"].send(RecordingHttp(status=404), {"webhook_url": "u"}, "T", "B", None)
 
 
+async def test_native_delivers_with_snapshot_written_to_disk(monkeypatch) -> None:
+    sent: list[Any] = []
+
+    async def deliver(title: str, body: str, snapshot: Any) -> None:
+        sent.append((title, body, snapshot))
+
+    monkeypatch.setattr(NOTIFIERS["native"], "_deliver", deliver)
+    await NOTIFIERS["native"].send(None, {}, "Title", "Body", JPEG)
+    title, body, snapshot = sent[-1]
+    assert (title, body) == ("Title", "Body")
+    assert snapshot is not None and snapshot.read_bytes() == JPEG, "the snapshot is written where the OS can attach it"
+
+
+async def test_native_delivers_text_without_snapshot(monkeypatch) -> None:
+    sent: list[Any] = []
+
+    async def deliver(title: str, body: str, snapshot: Any) -> None:
+        sent.append(snapshot)
+
+    monkeypatch.setattr(NOTIFIERS["native"], "_deliver", deliver)
+    await NOTIFIERS["native"].send(None, {}, "T", "B", None)
+    assert sent == [None], "no snapshot means no attachment"
+
+
+def test_native_runs_in_the_desktop_app_only() -> None:
+    assert NOTIFIERS["native"].browser_ok is False
+    assert NOTIFIERS["native"].desktop_only is True
+
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [

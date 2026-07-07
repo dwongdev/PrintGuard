@@ -27,6 +27,7 @@ printguard-desktop = "printguard.server.desktop:main"
 
 [project.optional-dependencies]
 desktop = [
+    "desktop-notifier>=6.1",
     "pillow>=10",
     "platformdirs>=4",
     "pystray>=0.19.5",
