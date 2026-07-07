@@ -58,7 +58,7 @@ export const GUIDE: GuideSection[] = [
     title: "Printers",
     body: (
       <>
-        Connect a printer — <strong>OctoPrint</strong>, <strong>Klipper (Moonraker)</strong> or{" "}
+        Connect a printer — <strong>OctoPrint</strong>, <strong>Klipper (Moonraker)</strong>, <strong>PrusaLink</strong> or{" "}
         <strong>Bambu Lab</strong> — and PrintGuard can read its status and pause or cancel a print on
         a defect. It's optional: without one, a monitor still watches and alerts.{" "}
         <a className={link} href={docs("printers.md")} target="_blank" rel="noreferrer">
