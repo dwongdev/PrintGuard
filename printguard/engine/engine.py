@@ -257,6 +257,19 @@ class Engine:
         )
         return await self.platform.encode_jpeg(rgb)
 
+    async def classify(self, data: bytes, sensitivity: float = 1.0) -> dict[str, Any]:
+        """Classifies a supplied frame, returning the model's verdict and defect score.
+
+        Decodes the image on the platform and runs the same inference the scheduler
+        uses — the stateless equivalent of a camera's latest per-frame result, for a
+        frame the caller already holds rather than one PrintGuard pulls itself.
+        """
+        rgb = await self.platform.decode_jpeg(data)
+        if rgb is None:
+            raise RuntimeError("could not decode image")
+        result = await self.platform.infer(rgb)
+        return {**result, "defect_score": vision.defect_score(result, sensitivity)}
+
     def _save(self) -> None:
         self.platform.save_state(
             {

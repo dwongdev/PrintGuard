@@ -65,6 +65,29 @@ async def test_snapshot_returns_jpeg_or_none() -> None:
         await engine.stop()
 
 
+async def test_classify_scores_a_supplied_frame() -> None:
+    engine = Engine(FakePlatform())
+    await engine.start()
+    try:
+        result = await engine.classify(b"\xff\xd8jpeg", sensitivity=1.0)
+        assert result["prediction"] == "success"
+        assert 0.0 <= result["defect_score"] <= 1.0
+        with pytest.raises(RuntimeError):
+            await engine.classify(b"not an image")
+    finally:
+        await engine.stop()
+
+
+async def test_classify_endpoint_reads_a_supplied_frame() -> None:
+    async with api() as (client, *_):
+        ok = await client.post("/classify", content=b"\xff\xd8jpeg", headers={"Content-Type": "image/jpeg"})
+        assert ok.status_code == 200
+        assert ok.json()["prediction"] in ("success", "failure", "unknown")
+        assert "defect_score" in ok.json()
+        bad = await client.post("/classify", content=b"nope", headers={"Content-Type": "image/jpeg"})
+        assert bad.status_code == 400
+
+
 async def test_baseline_is_read_only_without_tokens() -> None:
     async with api() as (client, _engine, _platform, _monitor_id, printer_id, camera_id, _tokens):
         assert (await client.get("/state")).status_code == 200

@@ -90,6 +90,10 @@ class Platform(Protocol):
         """Encodes an RGB frame as JPEG for alert snapshots."""
         ...
 
+    async def decode_jpeg(self, data: bytes) -> np.ndarray | None:
+        """Decodes image bytes to an HxWx3 RGB frame, or None if undecodable."""
+        ...
+
     def load_state(self) -> dict[str, Any]:
         """Loads the persisted engine state, or an empty dict."""
         ...

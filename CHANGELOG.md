@@ -69,6 +69,15 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   per-monitor quantity, not a field on the camera. The camera and monitor routes now carry
   response schemas too, so the interactive `/api/v1/docs` shows the shapes instead of empty bodies.
 
+- **`POST /api/v1/classify` — score a single supplied frame.** Hand the model a frame directly
+  (POST the bytes as `image/jpeg`, `read` scope, optional `?sensitivity=`) and get back
+  `{prediction, distances, margin, defect_score}` — the same per-frame verdict the scheduler
+  produces for a registered camera, without registering one. Useful for an external orchestrator
+  that can reach a camera PrintGuard can't (e.g. a cloud tool tunnelling to a LAN printer), or an
+  agent wanting a one-off check. Exposed both over REST and as a `classify_frame` MCP tool, so an
+  agent can hand PrintGuard an image from the conversation and get a verdict back. Reuses the
+  engine's own inference; hub only.
+
 ### Fixed
 
 - Registering a camera could report "no frames" even though the stream was healthy — the hub

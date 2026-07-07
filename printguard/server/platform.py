@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import logging
 import os
@@ -22,6 +23,7 @@ import av
 import httpx
 import numpy as np
 from ai_edge_litert.interpreter import Interpreter
+from PIL import Image
 
 from ..engine import vision
 from ..engine.platform import Frame
@@ -479,6 +481,17 @@ class ServerPlatform:
 
         try:
             return await asyncio.get_running_loop().run_in_executor(self._executor, encode)
+        except Exception:
+            return None
+
+    async def decode_jpeg(self, data: bytes) -> np.ndarray | None:
+        """Decodes supplied image bytes to an RGB frame with Pillow."""
+        def decode() -> np.ndarray:
+            with Image.open(io.BytesIO(data)) as image:
+                return np.asarray(image.convert("RGB"))
+
+        try:
+            return await asyncio.get_running_loop().run_in_executor(self._executor, decode)
         except Exception:
             return None
 

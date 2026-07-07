@@ -10,10 +10,10 @@ from __future__ import annotations
 
 import hmac
 import logging
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
@@ -389,6 +389,15 @@ def build_api_app(auth: ApiAuth) -> FastAPI:
         if jpeg is None:
             raise HTTPException(404, f"no frame available for camera {camera_id!r}")
         return Response(jpeg, media_type="image/jpeg")
+
+    @api.post("/classify", operation_id="classify_frame", tags=["read"])
+    async def classify_frame(
+        image: Annotated[bytes, Body(media_type="image/jpeg")],
+        sensitivity: float = 1.0,
+        engine: Engine = Depends(get_engine),
+    ) -> dict[str, Any]:
+        """Classifies a supplied JPEG frame — the model's verdict without a registered camera."""
+        return await engine.classify(image, sensitivity)
 
     @api.post("/cameras", operation_id="add_camera", tags=["manage"], response_model=list[CameraOut])
     async def add_camera(body: CameraCreate, engine: Engine = Depends(get_engine)) -> list[dict[str, Any]]:

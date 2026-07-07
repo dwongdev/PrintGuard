@@ -78,6 +78,9 @@ class FakePlatform:
     async def encode_jpeg(self, rgb: np.ndarray) -> bytes | None:
         return b"\xff\xd8fake"
 
+    async def decode_jpeg(self, data: bytes) -> np.ndarray | None:
+        return np.zeros((48, 64, 3), dtype=np.uint8) if data.startswith(b"\xff\xd8") else None
+
     def load_state(self) -> dict[str, Any]:
         return self.state
 
