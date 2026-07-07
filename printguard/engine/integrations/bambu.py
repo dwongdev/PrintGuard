@@ -60,7 +60,7 @@ class BambuAdapter(IntegrationAdapter):
         "channel. The access code is shown there; the serial number is under Settings > Device."
     )
     browser_ok = False
-    experimental = True
+    experimental = False
     schema = {
         "type": "object",
         "properties": {
