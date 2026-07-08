@@ -23,7 +23,6 @@ import av
 import httpx
 import numpy as np
 from ai_edge_litert.interpreter import Interpreter
-from PIL import Image
 
 from ..engine import vision
 from ..engine.platform import Frame
@@ -485,10 +484,10 @@ class ServerPlatform:
             return None
 
     async def decode_jpeg(self, data: bytes) -> np.ndarray | None:
-        """Decodes supplied image bytes to an RGB frame with Pillow."""
+        """Decodes supplied image bytes to an RGB frame with PyAV."""
         def decode() -> np.ndarray:
-            with Image.open(io.BytesIO(data)) as image:
-                return np.asarray(image.convert("RGB"))
+            with av.open(io.BytesIO(data)) as container:
+                return next(container.decode(video=0)).to_ndarray(format="rgb24")
 
         try:
             return await asyncio.get_running_loop().run_in_executor(self._executor, decode)
