@@ -218,8 +218,10 @@ export function Home() {
               )}
             </div>
             <p className="mt-4 text-xs leading-relaxed text-text-2">
-              Unsigned for now — first launch needs a right-click → <span className="text-text-1">Open</span> on macOS, or
-              <span className="text-text-1"> More info → Run anyway</span> on Windows.
+              Unsigned for now — first launch needs a one-time approval. On macOS, open{" "}
+              <span className="text-text-1">System Settings → Privacy &amp; Security</span> and click{" "}
+              <span className="text-text-1">Open Anyway</span>. On Windows, choose{" "}
+              <span className="text-text-1">More info → Run anyway</span>.
             </p>
           </div>
 
