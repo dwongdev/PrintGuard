@@ -9,6 +9,14 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 
 ## [2.3.1] - 2026-07-10
 
+### Changed
+
+- **The macOS app installs like a normal Mac app.** The download now presents PrintGuard beside
+  your Applications folder to drag it into, instead of a lone app icon. The builds are still
+  unsigned for now, so the first launch needs one manual approval — and on macOS Sequoia that moved
+  from the old right-click → **Open** to **System Settings → Privacy & Security → Open Anyway**
+  (double-click the app once, then approve it there).
+
 ### Security
 
 - **API token secrets stay out of the hub's logs.** Generating a token under **Settings → API &
