@@ -1,9 +1,13 @@
+<div align="center">
+
 # PrintGuard
 
 ![GitHub stars](https://img.shields.io/github/stars/oliverbravery/PrintGuard?style=flat&color=ff4d00)
 ![Licence](https://img.shields.io/badge/licence-GPL--2.0-2ea44f)
 [![Container](https://img.shields.io/badge/ghcr.io-oliverbravery%2Fprintguard-2496ed?logo=docker&logoColor=white)](https://github.com/oliverbravery/PrintGuard/pkgs/container/printguard)
 [![Live demo](https://img.shields.io/badge/demo-try_it_in_your_browser-ff4d00)](https://oliverbravery.github.io/PrintGuard/)
+
+</div>
 
 **PrintGuard watches your 3D printer cameras with an on-device vision model, pauses the
 printer the moment a print starts to fail, and sends a snapshot to your phone.** No cloud, no
@@ -63,9 +67,13 @@ terminal. It lives in your **menu bar / system tray**, so closing the window lea
 and the printer watched; quit from the tray when you're done. Reach it from your phone on the same
 network at `http://<computer>:8000`. Nothing leaves your machine.
 
+<div align="center">
+
 [![Download for macOS](https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/oliverbravery/PrintGuard/releases/latest/download/PrintGuard-macos-arm64.dmg)
 &nbsp;
 [![Download for Windows](https://img.shields.io/badge/Download-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/oliverbravery/PrintGuard/releases/latest/download/PrintGuard-windows-x64.zip)
+
+</div>
 
 Turn on **Start at login** from the tray menu and forget about it. The builds are unsigned for now,
 so the first launch needs a right-click → **Open** on macOS, or **More info → Run anyway** on
