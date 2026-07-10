@@ -76,8 +76,9 @@ network at `http://<computer>:8000`. Nothing leaves your machine.
 </div>
 
 Turn on **Start at login** from the tray menu and forget about it. The builds are unsigned for now,
-so the first launch needs a right-click → **Open** on macOS, or **More info → Run anyway** on
-Windows. On Linux, run the [Docker hub](#docker--for-an-always-on-server-or-nas) instead.
+so the first launch needs one manual approval: on macOS, double-click the app, then open
+**System Settings → Privacy & Security** and click **Open Anyway** under *Security*; on Windows,
+choose **More info → Run anyway**. On Linux, run the [Docker hub](#docker--for-an-always-on-server-or-nas) instead.
 
 ### Docker — for an always-on server or NAS
 

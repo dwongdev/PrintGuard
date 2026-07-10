@@ -49,7 +49,18 @@ uv run --extra desktop pyinstaller packaging/printguard.spec --noconfirm --distp
 
 if [ "$OS" = darwin ]; then
   out="dist/PrintGuard-${LABEL}.dmg"
-  hdiutil create -volname PrintGuard -srcfolder dist/PrintGuard.app -ov -format UDZO "$out" >/dev/null
+  command -v create-dmg >/dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install create-dmg
+  staging="build/desktop/dmg"; rm -rf "$staging"; mkdir -p "$staging"
+  cp -R dist/PrintGuard.app "$staging/"
+  create-dmg \
+    --volname PrintGuard \
+    --volicon build/desktop/icon.icns \
+    --window-size 600 400 \
+    --icon-size 128 \
+    --icon PrintGuard.app 160 185 \
+    --app-drop-link 440 185 \
+    --hide-extension PrintGuard.app \
+    "$out" "$staging"
 else
   out="dist/PrintGuard-${LABEL}.zip"
   powershell -NoProfile -Command "Compress-Archive -Path dist/PrintGuard -DestinationPath '$out' -Force"

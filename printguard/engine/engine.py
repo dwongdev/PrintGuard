@@ -151,7 +151,7 @@ class Engine:
             self._sinks.remove(sink)
 
     def emit(self, event: dict[str, Any]) -> None:
-        """Broadcasts an event to every connected transport.
+        """Logs the event when loggable, then broadcasts it to every transport.
 
         Alert, warning, error and device events are also written to the log,
         so the log tail carries the same timeline a maintainer sees in a bug
@@ -160,6 +160,15 @@ class Engine:
         level = EVENT_LOG_LEVELS.get(event.get("event", ""))
         if level is not None:
             logger.log(level, "%s %s", event["event"], {k: v for k, v in event.items() if k not in ("event", "req_id")})
+        self._broadcast(event)
+
+    def _broadcast(self, event: dict[str, Any]) -> None:
+        """Delivers an event to recent history and every transport sink.
+
+        Kept separate from emit() so an event carrying a one-time secret
+        (token_created) can reach the requesting transport without ever being
+        written to the log in clear text.
+        """
         if event.get("event") in RECENT_EVENT_TYPES:
             self._recent.append(event)
         for sink in list(self._sinks):
@@ -581,7 +590,7 @@ class Engine:
         record, secret = new_token(name, message.get("scope") or "read")
         token = Token(**record)
         self.tokens.add(token)
-        self.emit({"event": "token_created", **token.public(), "token": secret, "req_id": message.get("req_id")})
+        self._broadcast({"event": "token_created", **token.public(), "token": secret, "req_id": message.get("req_id")})
 
     async def _cmd_token_remove(self, message: dict[str, Any]) -> None:
         self.tokens.remove(message["id"])

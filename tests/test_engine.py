@@ -14,7 +14,7 @@ import numpy as np
 from fakes import FakePlatform
 
 from printguard.engine import logs, reports, vision, watchdog
-from printguard.engine.engine import Engine
+from printguard.engine.engine import EVENT_LOG_LEVELS, Engine
 from printguard.engine.integrations import INTEGRATIONS
 
 OCTOPRINT = {"provider": "octoprint", "config": {"base_url": "http://op", "api_key": "k"}}
@@ -459,3 +459,17 @@ async def test_report_send_surfaces_failure() -> None:
     assert [e["ok"] for e in sent] == [False, False]
     assert "description" in sent[0]["error"]
     assert "429" in sent[1]["error"]
+
+
+async def test_token_secret_reaches_requester_but_is_never_logged(monkeypatch) -> None:
+    monkeypatch.setitem(EVENT_LOG_LEVELS, "token_created", logging.ERROR)
+    platform = FakePlatform(infer_s=0.02)
+    async with configured_logging(), running_engine(platform, camera_fps=[]) as (engine, events):
+        await engine.handle({"cmd": "token.create", "req_id": 7, "name": "ci", "scope": "control"})
+
+    created = next(e for e in events if e.get("event") == "token_created")
+    assert created["req_id"] == 7 and created["scope"] == "control"
+    assert engine.tokens.get(created["id"]) is not None, "token was not registered"
+    secret = created["token"]
+    assert secret.startswith("pg_"), "requester did not receive the one-time secret"
+    assert all(secret not in line for line in logs.recent()), "token secret leaked into the log tail"

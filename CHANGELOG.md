@@ -7,6 +7,24 @@ release notes.
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-07-10
+
+### Changed
+
+- **The macOS app installs like a normal Mac app.** The download now presents PrintGuard beside
+  your Applications folder to drag it into, instead of a lone app icon. The builds are still
+  unsigned for now, so the first launch needs one manual approval — and on macOS Sequoia that moved
+  from the old right-click → **Open** to **System Settings → Privacy & Security → Open Anyway**
+  (double-click the app once, then approve it there).
+
+### Security
+
+- **API token secrets stay out of the hub's logs.** Generating a token under **Settings → API &
+  MCP access** now hands its one-time secret to the dashboard without that secret ever passing
+  through the server's log writer, resolving a code-scanning finding about clear-text logging of
+  sensitive data. The token is still shown once and only its hash is stored — nothing about your
+  existing tokens changes.
+
 ## [2.3.0] - 2026-07-03
 
 ### Added
