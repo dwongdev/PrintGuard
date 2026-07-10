@@ -7,6 +7,16 @@ release notes.
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.2] - 2026-07-10
+
+### Fixed
+
+- **Landing-page macOS install steps match current macOS.** The desktop-app panel on the
+  [project site](https://oliverbravery.github.io/PrintGuard/) now shows the macOS Sequoia unlock
+  path — **System Settings → Privacy & Security → Open Anyway** — in place of the old
+  right-click → **Open** that newer macOS no longer offers. Website copy only; the app and Docker
+  image are unchanged.
+
 ## [2.3.1] - 2026-07-10
 
 ### Changed
