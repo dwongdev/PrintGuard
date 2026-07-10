@@ -36,7 +36,7 @@ const history: Record<string, ScorePoint[]> = {
 
 function engine(): EngineState {
   return {
-    mode: "hub", version: "2.2.0", update: null,
+    mode: "hub", version: "2.3.0", update: null,
     cameras: [
       camera("c1", "Workshop · Prusa", { kind: "rtsp", url: "rtsp://10.0.0.21:8554/prusa" }, true),
       camera("c2", "Garage · Ender", { kind: "rtsp", url: "rtsp://10.0.0.22:8554/ender" }),

@@ -123,6 +123,35 @@ async def test_discord_raises_on_rejection() -> None:
         await NOTIFIERS["discord"].send(RecordingHttp(status=404), {"webhook_url": "u"}, "T", "B", None)
 
 
+async def test_native_delivers_with_snapshot_written_to_disk(monkeypatch) -> None:
+    sent: list[Any] = []
+
+    async def deliver(title: str, body: str, snapshot: Any) -> None:
+        sent.append((title, body, snapshot))
+
+    monkeypatch.setattr(NOTIFIERS["native"], "_deliver", deliver)
+    await NOTIFIERS["native"].send(None, {}, "Title", "Body", JPEG)
+    title, body, snapshot = sent[-1]
+    assert (title, body) == ("Title", "Body")
+    assert snapshot is not None and snapshot.read_bytes() == JPEG, "the snapshot is written where the OS can attach it"
+
+
+async def test_native_delivers_text_without_snapshot(monkeypatch) -> None:
+    sent: list[Any] = []
+
+    async def deliver(title: str, body: str, snapshot: Any) -> None:
+        sent.append(snapshot)
+
+    monkeypatch.setattr(NOTIFIERS["native"], "_deliver", deliver)
+    await NOTIFIERS["native"].send(None, {}, "T", "B", None)
+    assert sent == [None], "no snapshot means no attachment"
+
+
+def test_native_runs_in_the_desktop_app_only() -> None:
+    assert NOTIFIERS["native"].browser_ok is False
+    assert NOTIFIERS["native"].desktop_only is True
+
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [
@@ -384,6 +413,82 @@ async def test_bambu_without_a_camera_exposes_nothing(monkeypatch) -> None:
 def test_bambu_runs_in_hub_mode_only() -> None:
     assert INTEGRATIONS["bambu"].browser_ok is False
     assert INTEGRATIONS["octoprint"].browser_ok is True
+
+
+PRUSA_CONFIG = {"base_url": "http://192.168.1.80", "password": "secret"}
+
+
+def _prusa_job(value: Any):
+    async def _job(config: dict[str, Any]) -> Any:
+        return value
+
+    return _job
+
+
+@pytest.mark.parametrize(
+    ("job_state", "expected"),
+    [
+        ("PRINTING", DeviceStatus.PRINTING),
+        ("PAUSED", DeviceStatus.PAUSED),
+        ("FINISHED", DeviceStatus.IDLE),
+        ("STOPPED", DeviceStatus.IDLE),
+        ("ERROR", DeviceStatus.ERROR),
+        ("", DeviceStatus.UNKNOWN),
+    ],
+)
+async def test_prusa_normalises_job_states(monkeypatch, job_state: str, expected: DeviceStatus) -> None:
+    job = {"id": 3, "state": job_state, "progress": 42, "file": {"display_name": "boat.gcode", "name": "BOAT~1.GCO"}}
+    monkeypatch.setattr(INTEGRATIONS["prusa"], "_job", _prusa_job(job))
+    state = await INTEGRATIONS["prusa"].fetch_state(None, PRUSA_CONFIG)
+    assert state.status is expected
+    assert state.progress == 42.0
+    assert state.job == "boat.gcode"
+
+
+async def test_prusa_no_active_job_is_idle(monkeypatch) -> None:
+    monkeypatch.setattr(INTEGRATIONS["prusa"], "_job", _prusa_job(None))
+    state = await INTEGRATIONS["prusa"].fetch_state(None, PRUSA_CONFIG)
+    assert state.status is DeviceStatus.IDLE
+    assert state.job is None, "204 No Content from /api/v1/job is idle, not a phantom job"
+
+
+async def test_prusa_unreachable_is_offline(monkeypatch) -> None:
+    async def boom(config: dict[str, Any]) -> Any:
+        raise ConnectionError("no route to printer")
+
+    monkeypatch.setattr(INTEGRATIONS["prusa"], "_job", boom)
+    state = await INTEGRATIONS["prusa"].fetch_state(None, PRUSA_CONFIG)
+    assert state.status is DeviceStatus.OFFLINE, "an unreachable or unauthorised printer keeps inference watching"
+
+
+async def test_prusa_falls_back_to_raw_filename(monkeypatch) -> None:
+    job = {"id": 1, "state": "PRINTING", "progress": 0, "file": {"name": "BOAT~1.GCO"}}
+    monkeypatch.setattr(INTEGRATIONS["prusa"], "_job", _prusa_job(job))
+    state = await INTEGRATIONS["prusa"].fetch_state(None, PRUSA_CONFIG)
+    assert state.job == "BOAT~1.GCO", "without a display name the raw 8.3 file name is used"
+
+
+async def test_prusa_commands_target_the_active_job_id(monkeypatch) -> None:
+    commands: list[tuple[int, DeviceAction]] = []
+    monkeypatch.setattr(INTEGRATIONS["prusa"], "_job", _prusa_job({"id": 7, "state": "PRINTING", "progress": 0}))
+
+    async def record(config: dict[str, Any], job_id: int, action: DeviceAction) -> None:
+        commands.append((job_id, action))
+
+    monkeypatch.setattr(INTEGRATIONS["prusa"], "_command", record)
+    for action in (DeviceAction.PAUSE, DeviceAction.RESUME, DeviceAction.CANCEL):
+        await INTEGRATIONS["prusa"].send(None, PRUSA_CONFIG, action)
+    assert commands == [(7, DeviceAction.PAUSE), (7, DeviceAction.RESUME), (7, DeviceAction.CANCEL)]
+
+
+async def test_prusa_send_without_active_job_raises(monkeypatch) -> None:
+    monkeypatch.setattr(INTEGRATIONS["prusa"], "_job", _prusa_job(None))
+    with pytest.raises(RuntimeError, match="no active job"):
+        await INTEGRATIONS["prusa"].send(None, PRUSA_CONFIG, DeviceAction.PAUSE)
+
+
+def test_prusa_runs_in_hub_mode_only() -> None:
+    assert INTEGRATIONS["prusa"].browser_ok is False
 
 
 def test_sanitise_monitor_clamps_and_defaults() -> None:

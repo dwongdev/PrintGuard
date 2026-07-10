@@ -11,12 +11,15 @@ inferred twice and results always describe the present.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any, Awaitable, Callable
 
 from . import vision
 from .platform import Frame, Platform
 from .registry import Camera, CameraRegistry
+
+logger = logging.getLogger(__name__)
 
 LATENCY_SMOOTHING = 0.25
 IDLE_POLL_S = 0.05
@@ -125,6 +128,7 @@ class Scheduler:
             await self._on_result(camera, Frame(rgb=rgb, seq=frame.seq, ts=frame.ts), result)
         except Exception as exc:
             camera.next_due = time.monotonic() + STALE_RETRY_S
+            logger.debug("inference failed on '%s'", camera.name, exc_info=True)
             if time.monotonic() - self._last_error_at > ERROR_THROTTLE_S:
                 self._last_error_at = time.monotonic()
                 self._on_error(f"inference failed on '{camera.name}': {exc}")

@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { currentLayout } from "./layout";
 import { bootLocal } from "./local";
+import { log } from "./log";
 import { resumePublishers } from "./stream";
 import { applyTheme } from "./theme";
-import type { Camera, CameraSource, EngineLink, EngineState, Layout, LayoutSection, Mode, Monitor, ScorePoint } from "./types";
+import type { Camera, CameraSource, EngineLink, EngineState, Layout, LayoutSection, Mode, Monitor, MonitorHistory, ScorePoint } from "./types";
 
 const HISTORY_LIMIT = 240;
 const UPDATE_DEBOUNCE_MS = 250;
@@ -46,7 +47,7 @@ export interface Toast {
   text: string;
 }
 
-export type DialogKind = "cameras" | "printers" | "monitor" | "settings" | "update" | "guide" | null;
+export type DialogKind = "cameras" | "printers" | "monitor" | "settings" | "update" | "guide" | "report" | null;
 
 interface PgStore {
   mode: Mode | null;
@@ -61,9 +62,13 @@ interface PgStore {
   testing: boolean;
   notifyTest: { provider: string; ok: boolean; error?: string } | null;
   testingNotifier: string | null;
+  reportResult: { ok: boolean; error?: string } | null;
   pending: Record<string, { req_id: number; cmd: string }>;
   toasts: Toast[];
   detailId: string | null;
+  statsMonitorId: string | null;
+  historyData: Record<string, MonitorHistory | null>;
+  snapshotCache: Record<string, string>;
   dialog: DialogKind;
   focusCameraId: string | null;
   createdToken: { name: string; secret: string } | null;
@@ -84,6 +89,8 @@ interface PgStore {
   discover(): void;
   openDialog(dialog: DialogKind, focusCameraId?: string | null): void;
   openDetail(id: string | null): void;
+  openStats(id: string | null): void;
+  fetchSnapshot(monitorId: string, id: string): void;
   clearCreatedToken(): void;
   testPrinter(provider: string, config: Record<string, string>): void;
   testNotifier(provider: string, config: Record<string, string>): void;
@@ -99,9 +106,11 @@ function connectHub(onEvent: (event: any) => void, onDown: () => void): EngineLi
   let closed = false;
   const open = () => {
     socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/ws`);
+    socket.onopen = () => log("info", "hub socket connected");
     socket.onmessage = (msg) => onEvent(JSON.parse(msg.data));
     socket.onclose = () => {
       if (!closed) {
+        log("warn", "hub socket closed — reconnecting");
         onDown();
         setTimeout(open, 1500);
       }
@@ -185,6 +194,19 @@ export const useStore = create<PgStore>((set, get) => {
         get().toast("alert", `Defect on ${name} — ${(event.score * 100).toFixed(0)}% (${event.action})`);
         break;
       }
+      case "history":
+        clearPending(event.req_id);
+        set((s) => ({
+          historyData: {
+            ...s.historyData,
+            [event.monitor_id]: { buckets: event.buckets, snaps: event.snaps, alerts: event.alerts, stats: event.stats },
+          },
+        }));
+        break;
+      case "snapshot":
+        clearPending(event.req_id);
+        set((s) => ({ snapshotCache: { ...s.snapshotCache, [event.id]: `data:image/jpeg;base64,${event.jpeg}` } }));
+        break;
       case "device":
         clearPending(event.req_id);
         set((s) =>
@@ -211,6 +233,9 @@ export const useStore = create<PgStore>((set, get) => {
       case "notify_test":
         set({ notifyTest: event, testingNotifier: null });
         break;
+      case "report_sent":
+        set({ reportResult: event });
+        break;
       case "token_created":
         set({ createdToken: { name: event.name, secret: event.token } });
         break;
@@ -234,27 +259,37 @@ export const useStore = create<PgStore>((set, get) => {
   };
 
   const boot = async (mode: Mode) => {
+    log("info", `boot: ${mode} mode`);
     set({ mode, phase: "booting", bootMsg: mode === "hub" ? "Connecting to hub" : "Preparing local engine" });
     try {
       if (mode === "hub") {
         const link = connectHub(onEvent, () => set({ bootMsg: "Reconnecting" }));
         set({ link });
       } else {
-        const link = await bootLocal(onEvent, (bootMsg) => set({ bootMsg }));
+        const link = await bootLocal(onEvent, (bootMsg) => {
+          log("info", `local boot: ${bootMsg}`);
+          set({ bootMsg });
+        });
         set({ link });
       }
     } catch (err) {
+      log("error", "boot failed:", err);
       set({ phase: "error", bootMsg: String(err) });
     }
   };
 
   const stored = modeFromUrl();
-  if (stored) queueMicrotask(() => boot(stored));
+  queueMicrotask(async () => {
+    if (stored) return void boot(stored);
+    const hubReady = await fetch("api/health").then((r) => r.ok).catch(() => false);
+    if (hubReady) boot("hub");
+    else set({ phase: "pick" });
+  });
   window.addEventListener("hashchange", () => location.reload());
 
   return {
     mode: stored,
-    phase: stored ? "booting" : "pick",
+    phase: "booting",
     bootMsg: "",
     link: null,
     engine: null,
@@ -265,9 +300,13 @@ export const useStore = create<PgStore>((set, get) => {
     testing: false,
     notifyTest: null,
     testingNotifier: null,
+    reportResult: null,
     pending: {},
     toasts: [],
     detailId: null,
+    statsMonitorId: null,
+    historyData: {},
+    snapshotCache: {},
     dialog: null,
     focusCameraId: null,
     createdToken: null,
@@ -343,12 +382,23 @@ export const useStore = create<PgStore>((set, get) => {
 
     openDialog(dialog, focusCameraId = null) {
       get().flushUpdates();
-      set({ dialog, discovered: null, printerTest: null, notifyTest: null, focusCameraId, createdToken: null });
+      set({ dialog, discovered: null, printerTest: null, notifyTest: null, reportResult: null, focusCameraId, createdToken: null });
     },
 
     openDetail(detailId) {
       get().flushUpdates();
       set({ detailId, printerTest: null });
+    },
+
+    openStats(statsMonitorId) {
+      get().flushUpdates();
+      set({ statsMonitorId });
+      if (statsMonitorId) get().send({ cmd: "history.get", monitor_id: statsMonitorId });
+    },
+
+    fetchSnapshot(monitorId, id) {
+      if (get().snapshotCache[id]) return;
+      get().send({ cmd: "snapshot.get", monitor_id: monitorId, id });
     },
 
     clearCreatedToken() {
@@ -366,6 +416,7 @@ export const useStore = create<PgStore>((set, get) => {
     },
 
     toast(kind, text) {
+      log(kind === "error" ? "error" : kind === "alert" ? "warn" : "info", "toast:", text);
       const id = ++toastSeq;
       set((s) => ({ toasts: [...s.toasts, { id, kind, text }] }));
       setTimeout(() => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })), 6000);

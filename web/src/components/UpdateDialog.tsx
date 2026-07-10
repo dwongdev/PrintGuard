@@ -67,15 +67,28 @@ export function UpdateDialog() {
             </div>
             <div className="hairline pt-4 space-y-2">
               <span className="label block">Update the hub</span>
-              <p className="text-[0.7rem] text-text-2">
-                Pull the new image and recreate the container where your compose file lives:
-              </p>
-              <div className="flex items-center gap-2">
-                <code className="mono text-[0.68rem] text-text-0 break-all flex-1">{PULL_COMMAND}</code>
-                <button className="btn" onClick={() => navigator.clipboard?.writeText(PULL_COMMAND)}>
-                  Copy
-                </button>
-              </div>
+              {update!.download ? (
+                <>
+                  <a className="btn btn-primary inline-block" href={update!.download} target="_blank" rel="noreferrer">
+                    Download v{update!.latest}
+                  </a>
+                  <p className="text-[0.7rem] text-text-2">
+                    Quit PrintGuard from the tray, replace the app with the downloaded one, and open it again.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-[0.7rem] text-text-2">
+                    Pull the new image and recreate the container where your compose file lives:
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <code className="mono text-[0.68rem] text-text-0 break-all flex-1">{PULL_COMMAND}</code>
+                    <button className="btn" onClick={() => navigator.clipboard?.writeText(PULL_COMMAND)}>
+                      Copy
+                    </button>
+                  </div>
+                </>
+              )}
               <a
                 href={update!.releases_url}
                 target="_blank"

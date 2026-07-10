@@ -78,6 +78,48 @@ export interface Monitor {
   watching?: boolean;
 }
 
+export interface HistoryBucket {
+  t: number;
+  n: number;
+  sum: number;
+  min: number;
+  max: number;
+  defects: number;
+}
+
+export interface Snapshot {
+  id: string;
+  ts: number;
+  score: number;
+  action: string;
+}
+
+export interface HistoryAlert {
+  ts: number;
+  score: number;
+  action: string;
+}
+
+export interface HistoryStats {
+  current: number;
+  avg: number;
+  min: number;
+  max: number;
+  inferences: number;
+  defect_frames: number;
+  defect_pct: number;
+  alerts: number;
+  watch_min: number;
+  snaps: number;
+}
+
+export interface MonitorHistory {
+  buckets: HistoryBucket[];
+  snaps: Snapshot[];
+  alerts: HistoryAlert[];
+  stats: Partial<HistoryStats>;
+}
+
 export interface SchemaProperty {
   type: string;
   title: string;
@@ -91,6 +133,7 @@ export interface AdapterMeta {
   label: string;
   docs_url: string;
   browser_ok?: boolean;
+  desktop_only?: boolean;
   experimental?: boolean;
   setup_url?: string | null;
   setup_hint?: string | null;
@@ -164,6 +207,7 @@ export interface UpdateInfo {
   latest: string;
   available: boolean;
   releases: UpdateRelease[];
+  download: string | null;
   checked_at: number;
   releases_url: string;
 }

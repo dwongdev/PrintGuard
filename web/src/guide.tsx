@@ -58,7 +58,7 @@ export const GUIDE: GuideSection[] = [
     title: "Printers",
     body: (
       <>
-        Connect a printer — <strong>OctoPrint</strong>, <strong>Klipper (Moonraker)</strong> or{" "}
+        Connect a printer — <strong>OctoPrint</strong>, <strong>Klipper (Moonraker)</strong>, <strong>PrusaLink</strong> or{" "}
         <strong>Bambu Lab</strong> — and PrintGuard can read its status and pause or cancel a print on
         a defect. It's optional: without one, a monitor still watches and alerts.{" "}
         <a className={link} href={docs("printers.md")} target="_blank" rel="noreferrer">
@@ -101,9 +101,10 @@ export const GUIDE: GuideSection[] = [
     title: "Alerts",
     body: (
       <>
-        Add a notification channel — <strong>ntfy</strong>, <strong>Telegram</strong> or{" "}
-        <strong>Discord</strong> — and PrintGuard sends a snapshot the moment a defect holds. Turn
-        notifications on per monitor in its detail panel.
+        Add a notification channel — <strong>ntfy</strong>, <strong>Telegram</strong>,{" "}
+        <strong>Discord</strong>, or <strong>native notifications</strong> in the desktop app — and
+        PrintGuard sends a snapshot the moment a defect holds. Turn notifications on per monitor in
+        its detail panel.
       </>
     ),
     action: { label: "Set up alerts", dialog: "settings" },
@@ -160,5 +161,18 @@ export const GUIDE: GuideSection[] = [
         frames, snapshots or scores are ever sent to a third party.
       </>
     ),
+  },
+  {
+    id: "report",
+    led: "led-warn",
+    title: "Something broken?",
+    body: (
+      <>
+        Report a bug from the <span className="mono">⚑</span> chip in the header — anonymously, no account
+        needed. Describe what happened, attach screenshots if they help, and optionally leave an email for
+        follow-up. A diagnostics bundle goes with it, with every credential stripped and no camera frames.
+      </>
+    ),
+    action: { label: "Report a bug", dialog: "report" },
   },
 ];

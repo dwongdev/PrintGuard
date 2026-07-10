@@ -76,7 +76,10 @@ export function SettingsDialog() {
     applyTheme(editing.id, upsertTheme(themes, editing), true);
   }, [editing]);
 
-  const channels = (engine?.notifiers ?? []).filter((n) => engine?.mode === "hub" || n.browser_ok);
+  const desktopApp = "pywebview" in window;
+  const channels = (engine?.notifiers ?? []).filter(
+    (n) => (engine?.mode === "hub" || n.browser_ok) && (!n.desktop_only || desktopApp),
+  );
 
   const tabs: { id: TabId; label: string }[] = [
     { id: "appearance", label: "Appearance" },
@@ -446,9 +449,11 @@ export function SettingsDialog() {
           <span className="text-xs text-text-1">
             Mode: <span className="mono text-accent">{engine?.mode}</span>
           </span>
-          <button className="btn" onClick={leaveMode}>
-            Switch mode
-          </button>
+          {engine?.mode === "local" && (
+            <button className="btn" onClick={leaveMode}>
+              Back to start
+            </button>
+          )}
         </div>
       </div>
     </Dialog>

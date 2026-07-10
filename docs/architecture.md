@@ -32,7 +32,7 @@ flowchart LR
 
     server --- mediamtx["MediaMTX<br/>RTSP / RTMP / HLS"]
     integrations --- printersvc["OctoPrint / Moonraker / Bambu Lab"]
-    notifiers --- push["ntfy / Telegram / Discord"]
+    notifiers --- push["ntfy / Telegram / Discord / native"]
 ```
 
 ## The platform contract
@@ -58,8 +58,9 @@ runtime service, extend the Platform contract on both sides.
 
 Commands (UI → engine): `discover`, `camera.add/update/remove`,
 `printer.add/update/remove`, `printer.action`, `printer.test`, `printer.cameras.refresh`,
-`monitor.add/update/remove`, `notify.test`, `settings.update`, `update.check`. Every command
-may carry a `req_id`, echoed on the responding event so the UI can resolve pending requests.
+`monitor.add/update/remove`, `notify.test`, `settings.update`, `update.check`, `report.send`.
+Every command may carry a `req_id`, echoed on the responding event so the UI can resolve
+pending requests.
 
 A **camera** is a video source and a **printer** is a control-service connection
 (OctoPrint/Klipper/Bambu); both are registered resources, created and deleted only in
@@ -76,8 +77,28 @@ own and are dropped with their printer.
 
 Events (engine → UI): a full `state` snapshot (on connect, after every command, and on a
 1 s ticker; it carries the running version and any available update), plus incremental
-`result`, `alert`, `warning`, `device`, `discovered`, `printer_test`, `notify_test` and
-`error` events.
+`result`, `alert`, `warning`, `device`, `discovered`, `printer_test`, `notify_test`,
+`report_sent` and `error` events.
+
+`report.send` is the anonymous bug report ([`engine/reports.py`](../printguard/engine/reports.py)):
+one user-initiated POST of a Sentry feedback envelope — description, optional contact email,
+user-attached files, a diagnostics bundle and the engine and UI log tails, with every
+credential redacted — through `platform.http`, so it works identically in both modes. There
+is no SDK and no automatic telemetry; nothing is sent unless the user submits a report.
+
+## Logging
+
+One setup ([`engine/logs.py`](../printguard/engine/logs.py)) serves every runtime: entry
+points call it once and records flow to stdout for `docker logs`, to a rotating file where
+no console exists (the desktop app sets `LOG_FILE` in its data directory), and into a
+bounded in-memory tail. Emitted alert, warning, error and device events are logged as they
+broadcast, so the tail carries the same timeline the UI shows plus the lifecycle around it
+— boot, camera attach/drop, resource registration, printer actions, API and socket denials.
+Uvicorn runs without its own log config so its records land in the same handlers. The UI
+keeps its own ring ([`web/src/log.ts`](../web/src/log.ts)) of boot milestones, socket drops,
+toasts, console warnings/errors and uncaught exceptions. Bug reports attach both tails,
+scrubbed of every configured credential value. `LOG_LEVEL=DEBUG` adds command traces and
+exception tracebacks.
 
 ## The programmatic surface (hub only)
 
@@ -180,7 +201,7 @@ printguard/
     printers.py      registered-printer (integration connection) validation
     watchdog.py      defect response: streaks, printer actions, notifications, health
     integrations/    printer service adapters (OctoPrint, Klipper, Bambu Lab, …)
-    notifiers/       alert channel adapters (ntfy, Telegram, Discord, …)
+    notifiers/       alert channel adapters (ntfy, Telegram, Discord, native desktop, …)
     adapters.py      shared adapter contract (id, label, docs_url, JSON-schema config)
   server/            hub platform: FastAPI, bundled MediaMTX (child process), LiteRT, PyAV
     api.py           REST API (/api/v1) over the engine protocol, scoped by token

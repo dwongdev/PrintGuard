@@ -11,8 +11,10 @@ import { Header, MobileActionBar } from "./Header";
 import { MonitorDialog } from "./MonitorDialog";
 import { MonitorTile } from "./MonitorTile";
 import { PrintersDialog } from "./PrintersDialog";
+import { ReportDialog } from "./ReportDialog";
 import { SettingsDialog } from "./SettingsDialog";
 import { rectSortingStrategy, Sortable } from "./Sortable";
+import { StatsPage } from "./StatsPage";
 import { UpdateDialog } from "./UpdateDialog";
 
 function Toasts() {
@@ -58,10 +60,11 @@ function Toasts() {
 }
 
 export function Dashboard() {
-  const { engine, dialog, detailId, customising, mutateLayout } = useStore();
+  const { engine, dialog, detailId, statsMonitorId, customising, mutateLayout } = useStore();
   const monitors = engine?.monitors ?? [];
   const { visible } = applyLayout(monitors, section(engine?.settings.layout, "monitors"));
   const detail = monitors.find((m) => m.id === detailId);
+  const stats = monitors.find((m) => m.id === statsMonitorId);
   return (
     <div className="min-h-screen">
       <a href="#main" className="skip-link">
@@ -98,7 +101,9 @@ export function Dashboard() {
       {dialog === "settings" && <SettingsDialog />}
       {dialog === "update" && <UpdateDialog />}
       {dialog === "guide" && <GuideDialog />}
+      {dialog === "report" && <ReportDialog />}
       {detail && <DetailPanel monitor={detail} />}
+      {stats && <StatsPage monitor={stats} />}
       <Toasts />
       <MobileActionBar />
     </div>

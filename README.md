@@ -1,9 +1,13 @@
+<div align="center">
+
 # PrintGuard
 
 ![GitHub stars](https://img.shields.io/github/stars/oliverbravery/PrintGuard?style=flat&color=ff4d00)
 ![Licence](https://img.shields.io/badge/licence-GPL--2.0-2ea44f)
 [![Container](https://img.shields.io/badge/ghcr.io-oliverbravery%2Fprintguard-2496ed?logo=docker&logoColor=white)](https://github.com/oliverbravery/PrintGuard/pkgs/container/printguard)
 [![Live demo](https://img.shields.io/badge/demo-try_it_in_your_browser-ff4d00)](https://oliverbravery.github.io/PrintGuard/)
+
+</div>
 
 **PrintGuard watches your 3D printer cameras with an on-device vision model, pauses the
 printer the moment a print starts to fail, and sends a snapshot to your phone.** No cloud, no
@@ -23,8 +27,8 @@ real, [jump to Quick start](#quick-start).
 - **Failures caught early** — a compact vision model scores every frame and acts the moment a
   defect holds, so spaghetti and detachments don't run for hours (or burn through a spool).
 - **Damage stopped for you** — a sustained defect can pause or cancel the print through
-  OctoPrint, Klipper or Bambu Lab, with sensitivity, thresholds and cooldowns you set per
-  monitor.
+  OctoPrint, Klipper, Prusa (PrusaLink) or Bambu Lab, with sensitivity, thresholds and
+  cooldowns you set per monitor.
 - **A heads-up on your phone** — the instant a defect holds, a snapshot lands over ntfy,
   Telegram or Discord.
 - **Quiet when nothing's wrong** — printers linked to a service are only watched while they
@@ -56,7 +60,28 @@ Open any monitor for its live risk score, score history and one-tap printer cont
 
 ## Quick start
 
-PrintGuard is a **single container** - Install with one command:
+### Desktop app — macOS & Windows
+
+The easiest way to run a hub on the computer next to your printer: a native app — no Docker, no
+terminal. It lives in your **menu bar / system tray**, so closing the window leaves the hub running
+and the printer watched; quit from the tray when you're done. Reach it from your phone on the same
+network at `http://<computer>:8000`. Nothing leaves your machine.
+
+<div align="center">
+
+[![Download for macOS](https://img.shields.io/badge/Download-macOS-000000?style=for-the-badge&logo=apple&logoColor=white)](https://github.com/oliverbravery/PrintGuard/releases/latest/download/PrintGuard-macos-arm64.dmg)
+&nbsp;
+[![Download for Windows](https://img.shields.io/badge/Download-Windows-0078D6?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/oliverbravery/PrintGuard/releases/latest/download/PrintGuard-windows-x64.zip)
+
+</div>
+
+Turn on **Start at login** from the tray menu and forget about it. The builds are unsigned for now,
+so the first launch needs a right-click → **Open** on macOS, or **More info → Run anyway** on
+Windows. On Linux, run the [Docker hub](#docker--for-an-always-on-server-or-nas) instead.
+
+### Docker — for an always-on server or NAS
+
+PrintGuard is a **single container** — install with one command:
 
 ```bash
 docker run -d --name printguard --restart unless-stopped \
@@ -90,12 +115,15 @@ it when you're ready.
 | Frames leave the device | never | only to your own server |
 | Survives closing the tab | no | yes |
 
+The **desktop app** (macOS and Windows) is hub mode without the setup — the same persistent engine
+as the container, in a native window on (and never leaving) your own computer.
+
 ## Printers, cameras and alerts
 
-Register your printer — OctoPrint, Klipper (Moonraker) or Bambu Lab — bind it to a monitor,
+Register your printer — OctoPrint, Klipper (Moonraker), Prusa (PrusaLink) or Bambu Lab — bind it to a monitor,
 and choose what a sustained defect does: alert, pause or cancel. If a printer exposes a webcam,
-PrintGuard adds it as a camera for you. Turn on ntfy, Telegram or Discord in **Settings** to
-get snapshot alerts and watchdog warnings.
+PrintGuard adds it as a camera for you. Turn on ntfy, Telegram, Discord, or (in the desktop app)
+native OS notifications in **Settings** to get snapshot alerts and watchdog warnings.
 
 Connecting over Docker or HTTPS, or linking a Bambu printer, has a few gotchas — the full
 walk-through (and webcam/camera options) lives in **[docs/printers.md](docs/printers.md)**.

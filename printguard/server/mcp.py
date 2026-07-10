@@ -2,15 +2,17 @@
 
 The tool set is derived from the REST API with FastMCP.from_fastapi, so agents
 and developers share one definition that always tracks the engine protocol. The
-only hand-written tool is the camera frame, because a JPEG response is returned
-as native MCP image content rather than a binary body. A single authorization
-check resolves the caller's bearer token against the live, UI-managed token set
-through the same ApiAuth the REST layer uses, hiding and blocking any tool the
-caller's scope does not cover.
+two image tools are hand-written because a binary body cannot be derived: the
+camera frame returns a JPEG as native MCP image content, and classify takes an
+image the caller supplies (base64) and returns the model's verdict. A single
+authorization check resolves the caller's bearer token against the live,
+UI-managed token set through the same ApiAuth the REST layer uses, hiding and
+blocking any tool the caller's scope does not cover.
 """
 
 from __future__ import annotations
 
+import base64
 from importlib.metadata import version as package_version
 from typing import Callable
 
@@ -29,8 +31,9 @@ from .api import ApiAuth, route_scope
 
 INSTRUCTIONS = (
     "Monitor and control 3D printers through PrintGuard. Read monitor, printer and "
-    "camera status, fetch the current camera frame as an image to judge a print, and "
-    "pause, resume or cancel a print through its printer service."
+    "camera status, fetch the current camera frame as an image to judge a print, "
+    "classify a print image you supply for defects, and pause, resume or cancel a "
+    "print through its printer service."
 )
 
 
@@ -63,6 +66,7 @@ def build_mcp(
         instructions=INSTRUCTIONS,
         route_maps=[
             RouteMap(methods="*", pattern=r".*/frame$", mcp_type=MCPType.EXCLUDE),
+            RouteMap(methods="*", pattern=r".*/classify$", mcp_type=MCPType.EXCLUDE),
             RouteMap(methods="*", pattern=r".*", mcp_type=MCPType.TOOL),
         ],
         httpx_client_kwargs={"headers": {"Authorization": f"Bearer {internal_token}"}},
@@ -76,6 +80,20 @@ def build_mcp(
         if jpeg is None:
             raise ToolError(f"no frame available for camera {camera_id!r}")
         return Image(data=jpeg, format="jpeg")
+
+    @mcp.tool(name="classify_frame", tags={"read"})
+    async def classify_frame(image_base64: str, sensitivity: float = 1.0) -> dict:
+        """Classifies a supplied print image for defects — no registered camera needed.
+
+        Pass a base64-encoded JPEG or PNG frame (one shared in the conversation or
+        downloaded) and get back {prediction, distances, margin, defect_score}: the
+        same per-frame verdict the scheduler produces for a camera PrintGuard pulls
+        itself. Use it to judge a still the model never captured directly.
+        """
+        try:
+            return await get_engine().classify(base64.b64decode(image_base64), sensitivity)
+        except (ValueError, RuntimeError) as exc:
+            raise ToolError(f"could not classify image: {exc}")
 
     return mcp
 

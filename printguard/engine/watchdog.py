@@ -10,6 +10,7 @@ configured notifiers so the user hears about them away from the dashboard.
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -20,6 +21,8 @@ from .platform import Frame
 
 if TYPE_CHECKING:
     from .engine import Engine
+
+logger = logging.getLogger(__name__)
 
 DEVICE_POLL_S = 5.0
 NOTIFY_COOLDOWN_S = 30.0
@@ -171,7 +174,9 @@ class Watchdog:
         action = await self._act(monitor)
         monitor["alert"] = {"score": round(score, 3), "action": action, "ts": time.time()}
         self._engine.emit({"event": "alert", "monitor_id": mid, **monitor["alert"]})
-        await self._notify(monitor, frame, score, action)
+        image = await self._engine.platform.encode_jpeg(frame.rgb)
+        self._engine.note_alert(mid, monitor["alert"], image)
+        await self._notify(monitor, score, action, image)
 
     async def _act(self, monitor: dict[str, Any]) -> str:
         wanted = monitor.get("on_defect", "none")
@@ -188,10 +193,11 @@ class Watchdog:
             except Exception as exc:
                 last_error = exc
                 await asyncio.sleep(ACT_RETRY_S)
+        logger.debug("printer action traceback for '%s'", monitor["name"], exc_info=last_error)
         self._engine.emit({"event": "error", "message": f"{monitor['name']}: automatic {wanted} failed: {last_error}"})
         return "failed"
 
-    async def _notify(self, monitor: dict[str, Any], frame: Frame, score: float, action: str) -> None:
+    async def _notify(self, monitor: dict[str, Any], score: float, action: str, image: bytes | None) -> None:
         if not monitor.get("notify"):
             return
         if time.monotonic() - self._last_notified.get(monitor["id"], 0.0) < NOTIFY_COOLDOWN_S:
@@ -204,7 +210,6 @@ class Watchdog:
             body = "No automatic action configured"
         else:
             body = f"Action taken: {action}"
-        image = await self._engine.platform.encode_jpeg(frame.rgb)
         await self._send_alerts(title, body, image)
 
     async def _send_alerts(self, title: str, body: str, image: bytes | None) -> None:
@@ -213,4 +218,5 @@ class Watchdog:
             try:
                 await NOTIFIERS[notifier_id].send(self._engine.platform.http, config, title, body, image)
             except Exception as exc:
+                logger.debug("notifier %s delivery traceback", notifier_id, exc_info=True)
                 self._engine.emit({"event": "error", "message": f"{NOTIFIERS[notifier_id].label} notification failed: {exc}"})

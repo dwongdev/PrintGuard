@@ -3,6 +3,8 @@ hand-written camera frame tool returning native image content."""
 
 from __future__ import annotations
 
+import base64
+
 import mcp.types as mt
 import pytest
 from fastmcp import Client
@@ -21,6 +23,9 @@ READ_TOOLS = {
     "list_cameras",
     "get_camera",
     "get_camera_frame",
+    "classify_frame",
+    "get_monitor_history",
+    "get_monitor_snapshot",
     "recent_events",
 }
 
@@ -66,6 +71,20 @@ async def test_frame_tool_returns_image_content() -> None:
             result = await client.call_tool("get_camera_frame", {"camera_id": camera_id})
         images = [block for block in result.content if isinstance(block, mt.ImageContent)]
         assert images and images[0].mimeType == "image/jpeg"
+    finally:
+        await engine.stop()
+
+
+async def test_classify_tool_scores_a_supplied_image() -> None:
+    engine, mcp, _ = await _server()
+    try:
+        image_base64 = base64.b64encode(b"\xff\xd8jpeg").decode()
+        async with Client(mcp) as client:
+            result = await client.call_tool("classify_frame", {"image_base64": image_base64})
+            with pytest.raises(Exception):
+                await client.call_tool("classify_frame", {"image_base64": base64.b64encode(b"nope").decode()})
+        assert result.data["prediction"] in ("success", "failure", "unknown")
+        assert "defect_score" in result.data
     finally:
         await engine.stop()
 

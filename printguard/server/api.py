@@ -9,17 +9,20 @@ the same tags drive both this API's bearer-scope guard and the MCP tool filter.
 from __future__ import annotations
 
 import hmac
-from typing import Any, Literal
+import logging
+from typing import Annotated, Any, Literal
 from urllib.parse import urlsplit, urlunsplit
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Body, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from ..engine.engine import Engine
 from ..engine.integrations import INTEGRATIONS
 from ..engine.notifiers import NOTIFIERS
 from ..engine.tokens import SCOPE_ORDER, expand_scope, hash_secret
+
+logger = logging.getLogger(__name__)
 
 
 def route_scope(tags: list[str] | None) -> str:
@@ -66,9 +69,11 @@ async def scope_guard(request: Request) -> None:
     auth: ApiAuth = request.app.state.api_auth
     granted = auth.resolve(request.headers.get("authorization"), request.app.state.engine.token_scopes())
     if granted is None:
+        logger.warning("rejected API request with missing or invalid token: %s %s", request.method, request.url.path)
         raise HTTPException(401, "missing or invalid token", {"WWW-Authenticate": "Bearer"})
     required = route_scope(getattr(request.scope.get("route"), "tags", None))
     if required not in granted:
+        logger.warning("rejected API request lacking %s scope: %s %s", required, request.method, request.url.path)
         raise HTTPException(403, f"requires {required} scope")
 
 
@@ -128,6 +133,61 @@ class SettingsPatch(BaseModel):
 
 class ActionBody(BaseModel):
     action: Literal["pause", "resume", "cancel"]
+
+
+class _ReadModel(BaseModel):
+    """Base for the read-surface response models: it documents each field for
+    `/api/v1/docs` yet passes any unlisted field straight through and tolerates
+    absent ones, so a response still mirrors the resource's `.public()` exactly."""
+
+    model_config = ConfigDict(extra="allow")
+
+
+class LastResult(_ReadModel):
+    prediction: Literal["success", "failure", "unknown"] | None = None
+    distances: dict[str, float] | None = None
+    margin: float | None = None
+
+
+class CameraOut(_ReadModel):
+    id: str
+    name: str | None = None
+    source: dict[str, Any] | None = None
+    printer_id: str | None = None
+    max_fps: float | None = None
+    target_fps: float | None = None
+    achieved_fps: float | None = None
+    inferring: bool | None = None
+    in_use: bool | None = None
+    online: bool | None = None
+    last_result: LastResult | None = None
+    brightness: float | None = None
+    contrast: float | None = None
+    sharpness: float | None = None
+    crop: dict[str, float] | None = None
+    rotation: int | None = None
+
+
+class MonitorAlert(_ReadModel):
+    score: float | None = None
+    action: str | None = None
+    ts: float | None = None
+
+
+class MonitorOut(_ReadModel):
+    id: str
+    name: str | None = None
+    camera_id: str | None = None
+    printer_id: str | None = None
+    enabled: bool | None = None
+    threshold: float | None = None
+    sensitivity: float | None = None
+    consecutive: int | None = None
+    notify: bool | None = None
+    on_defect: Literal["none", "pause", "cancel"] | None = None
+    cooldown_s: int | None = None
+    watching: bool | None = None
+    alert: MonitorAlert | None = None
 
 
 def _find(items: list[dict[str, Any]], item_id: str, kind: str) -> dict[str, Any]:
@@ -215,33 +275,55 @@ def build_api_app(auth: ApiAuth) -> FastAPI:
         """Returns the full snapshot: cameras, printers, monitors, settings and stats."""
         return public_state(engine)
 
-    @api.get("/monitors", operation_id="list_monitors", tags=["read"])
+    @api.get("/monitors", operation_id="list_monitors", tags=["read"], response_model=list[MonitorOut])
     async def list_monitors(engine: Engine = Depends(get_engine)) -> list[dict[str, Any]]:
         """Lists every monitor with its camera, linked printer and latest alert."""
         return public_state(engine)["monitors"]
 
-    @api.get("/monitors/{monitor_id}", operation_id="get_monitor", tags=["read"])
+    @api.get("/monitors/{monitor_id}", operation_id="get_monitor", tags=["read"], response_model=MonitorOut)
     async def get_monitor(monitor_id: str, engine: Engine = Depends(get_engine)) -> dict[str, Any]:
         """Returns one monitor's settings, bindings and latest alert."""
         return _find(public_state(engine)["monitors"], monitor_id, "monitor")
 
-    @api.post("/monitors", operation_id="add_monitor", tags=["manage"])
+    @api.post("/monitors", operation_id="add_monitor", tags=["manage"], response_model=list[MonitorOut])
     async def add_monitor(body: MonitorFields, engine: Engine = Depends(get_engine)) -> list[dict[str, Any]]:
         """Creates a monitor binding a camera and an optional printer."""
         await engine.request({"cmd": "monitor.add", "monitor": body.model_dump(exclude_none=True)})
         return public_state(engine)["monitors"]
 
-    @api.patch("/monitors/{monitor_id}", operation_id="update_monitor", tags=["manage"])
+    @api.patch("/monitors/{monitor_id}", operation_id="update_monitor", tags=["manage"], response_model=MonitorOut)
     async def update_monitor(monitor_id: str, body: MonitorFields, engine: Engine = Depends(get_engine)) -> dict[str, Any]:
         """Updates a monitor's bindings, thresholds or defect response."""
         await engine.request({"cmd": "monitor.update", "id": monitor_id, "patch": body.model_dump(exclude_none=True)})
         return _find(public_state(engine)["monitors"], monitor_id, "monitor")
 
-    @api.delete("/monitors/{monitor_id}", operation_id="remove_monitor", tags=["manage"])
+    @api.delete("/monitors/{monitor_id}", operation_id="remove_monitor", tags=["manage"], response_model=list[MonitorOut])
     async def remove_monitor(monitor_id: str, engine: Engine = Depends(get_engine)) -> list[dict[str, Any]]:
         """Removes a monitor and returns the updated monitor list."""
         await engine.request({"cmd": "monitor.remove", "id": monitor_id})
         return public_state(engine)["monitors"]
+
+    @api.get("/monitors/{monitor_id}/history", operation_id="get_monitor_history", tags=["read"])
+    async def get_monitor_history(monitor_id: str, engine: Engine = Depends(get_engine)) -> dict[str, Any]:
+        """Returns a monitor's rolled-up risk buckets, snapshot index and summary stats."""
+        _find(public_state(engine)["monitors"], monitor_id, "monitor")
+        events = await engine.request({"cmd": "history.get", "monitor_id": monitor_id})
+        history = next((e for e in events if e.get("event") == "history"), {})
+        return {key: value for key, value in history.items() if key not in ("event", "req_id")}
+
+    @api.get(
+        "/monitors/{monitor_id}/snapshots/{snap_id}",
+        operation_id="get_monitor_snapshot",
+        tags=["read"],
+        responses={200: {"content": {"image/jpeg": {}}}},
+        response_class=Response,
+    )
+    async def get_monitor_snapshot(monitor_id: str, snap_id: str, engine: Engine = Depends(get_engine)) -> Response:
+        """Returns a captured risky-moment snapshot as a JPEG image."""
+        jpeg = engine.monitor_snapshot(monitor_id, snap_id)
+        if jpeg is None:
+            raise HTTPException(404, f"no snapshot {snap_id!r} for monitor {monitor_id!r}")
+        return Response(jpeg, media_type="image/jpeg")
 
     @api.get("/printers", operation_id="list_printers", tags=["read"])
     async def list_printers(engine: Engine = Depends(get_engine)) -> list[dict[str, Any]]:
@@ -284,12 +366,12 @@ def build_api_app(auth: ApiAuth) -> FastAPI:
         events = await engine.request({"cmd": "printer.test", "provider": body.provider, "config": body.config})
         return next((e for e in events if e.get("event") == "printer_test"), {"ok": False})
 
-    @api.get("/cameras", operation_id="list_cameras", tags=["read"])
+    @api.get("/cameras", operation_id="list_cameras", tags=["read"], response_model=list[CameraOut])
     async def list_cameras(engine: Engine = Depends(get_engine)) -> list[dict[str, Any]]:
         """Lists every camera with its rate, health and latest score."""
         return public_state(engine)["cameras"]
 
-    @api.get("/cameras/{camera_id}", operation_id="get_camera", tags=["read"])
+    @api.get("/cameras/{camera_id}", operation_id="get_camera", tags=["read"], response_model=CameraOut)
     async def get_camera(camera_id: str, engine: Engine = Depends(get_engine)) -> dict[str, Any]:
         """Returns one camera's settings and live statistics."""
         return _find(public_state(engine)["cameras"], camera_id, "camera")
@@ -308,7 +390,16 @@ def build_api_app(auth: ApiAuth) -> FastAPI:
             raise HTTPException(404, f"no frame available for camera {camera_id!r}")
         return Response(jpeg, media_type="image/jpeg")
 
-    @api.post("/cameras", operation_id="add_camera", tags=["manage"])
+    @api.post("/classify", operation_id="classify_frame", tags=["read"])
+    async def classify_frame(
+        image: Annotated[bytes, Body(media_type="image/jpeg")],
+        sensitivity: float = 1.0,
+        engine: Engine = Depends(get_engine),
+    ) -> dict[str, Any]:
+        """Classifies a supplied JPEG frame — the model's verdict without a registered camera."""
+        return await engine.classify(image, sensitivity)
+
+    @api.post("/cameras", operation_id="add_camera", tags=["manage"], response_model=list[CameraOut])
     async def add_camera(body: CameraCreate, engine: Engine = Depends(get_engine)) -> list[dict[str, Any]]:
         """Registers a camera and returns the updated camera list."""
         payload = {"cmd": "camera.add", "source": body.source.model_dump(exclude_none=True)}
@@ -317,13 +408,13 @@ def build_api_app(auth: ApiAuth) -> FastAPI:
         await engine.request(payload)
         return public_state(engine)["cameras"]
 
-    @api.patch("/cameras/{camera_id}", operation_id="update_camera", tags=["manage"])
+    @api.patch("/cameras/{camera_id}", operation_id="update_camera", tags=["manage"], response_model=CameraOut)
     async def update_camera(camera_id: str, body: CameraPatch, engine: Engine = Depends(get_engine)) -> dict[str, Any]:
         """Updates a camera's name or image adjustments."""
         await engine.request({"cmd": "camera.update", "id": camera_id, "patch": body.model_dump(exclude_none=True)})
         return _find(public_state(engine)["cameras"], camera_id, "camera")
 
-    @api.delete("/cameras/{camera_id}", operation_id="remove_camera", tags=["manage"])
+    @api.delete("/cameras/{camera_id}", operation_id="remove_camera", tags=["manage"], response_model=list[CameraOut])
     async def remove_camera(camera_id: str, engine: Engine = Depends(get_engine)) -> list[dict[str, Any]]:
         """Removes a camera and returns the updated camera list."""
         await engine.request({"cmd": "camera.remove", "id": camera_id})

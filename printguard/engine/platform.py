@@ -53,6 +53,10 @@ class Platform(Protocol):
     """GitHub ``owner/name`` to check for updates, or None to never call out
     (local mode is always the latest deployed build)."""
 
+    update_asset: str | None
+    """Release asset filename this deployment updates with (the desktop app's
+    installer), or None when the deployment updates outside the app."""
+
     async def infer(self, rgb: np.ndarray) -> dict[str, Any]:
         """Runs the model on an RGB frame and returns a classify() result."""
         ...
@@ -84,6 +88,10 @@ class Platform(Protocol):
 
     async def encode_jpeg(self, rgb: np.ndarray) -> bytes | None:
         """Encodes an RGB frame as JPEG for alert snapshots."""
+        ...
+
+    async def decode_jpeg(self, data: bytes) -> np.ndarray | None:
+        """Decodes image bytes to an HxWx3 RGB frame, or None if undecodable."""
         ...
 
     def load_state(self) -> dict[str, Any]:

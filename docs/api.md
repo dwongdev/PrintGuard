@@ -56,6 +56,7 @@ Base path `/api/v1`. Requests and responses are JSON, except the camera frame, w
 | `GET` | `/cameras` | read | List cameras with rate, health and latest score |
 | `GET` | `/cameras/{id}` | read | One camera |
 | `GET` | `/cameras/{id}/frame` | read | Freshest frame as `image/jpeg` |
+| `POST` | `/classify` | read | Classify a supplied frame (body = `image/jpeg`, `?sensitivity=`); no registered camera needed |
 | `GET` | `/events` | read | Recent alerts, warnings, device changes and errors |
 | `POST` | `/printers/{id}/action` | control | `{"action": "pause" \| "resume" \| "cancel"}` |
 | `POST` | `/monitors` | manage | Add a monitor (binds a camera + optional printer) |
@@ -85,6 +86,11 @@ curl -H "Authorization: Bearer $TOKEN" https://host/api/v1/cameras/$CAM/frame -o
 # Pause a print
 curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
   -d '{"action":"pause"}' https://host/api/v1/printers/$PRINTER/action
+
+# Classify a supplied frame (no registered camera needed)
+curl -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: image/jpeg" \
+  --data-binary @frame.jpg https://host/api/v1/classify
+# → {"prediction":"success","distances":{...},"margin":1.16,"defect_score":0.35}
 ```
 
 ## MCP server
@@ -140,3 +146,65 @@ shape, so a printer reads and controls the same way regardless of its service.
 - **State** — `{ "status", "progress" (0–100), "job" }`, reported on printer objects as
   `device_state`.
 - **Actions** — `pause`, `resume`, `cancel`.
+
+## Reading detection state
+
+The response bodies below are what an integrator polls to answer "is this print failing?".
+Two facts matter and are easy to miss: the **camera** carries a per-frame *classification*,
+while the smoothed **0–1 defect score** is a per-**monitor** quantity — the camera object has
+no numeric score field.
+
+**Camera object** (`GET /cameras`, `GET /cameras/{id}`):
+
+```jsonc
+{
+  "id": "cam_1a2b",
+  "name": "Left printer",
+  "source": { /* redacted of any access_code / credentials */ },
+  "printer_id": "prn_…" | null,
+  "max_fps": 5.0, "target_fps": 2.0, "achieved_fps": 1.9,   // rate
+  "inferring": true, "in_use": true, "online": true,        // health
+  "last_result": {                                          // latest score (per FRAME)
+    "prediction": "success",                                //   "success" | "failure" | "unknown"
+    "distances": { "success": 0.48, "failure": 1.64 },      //   distance to each class prototype
+    "margin": 1.16                                          //   runner-up minus best (confidence)
+  },
+  "brightness": 1.0, "contrast": 1.0, "sharpness": 0.0, "crop": null, "rotation": 0
+}
+```
+
+`last_result` is the newest raw classification, or `null` before the camera has been
+inferred. `prediction` is simply the **nearest class prototype** for that frame (no
+threshold applied) — the quickest per-camera "failing?" read. It is `"unknown"` when the
+frame can't be classified (e.g. the embedding isn't finite).
+
+**Monitor object** (`GET /monitors`, `GET /monitors/{id}`): binds a camera (+ optional
+printer) and holds the detection policy and the latest alert:
+
+```jsonc
+{
+  "id": "mon_…",
+  "camera_id": "cam_1a2b",
+  "printer_id": "prn_…" | "",
+  "sensitivity": 1.0,          // scales how far the distance margin moves the score off 0.5
+  "threshold": 0.6,            // defect score at/above which a frame counts as a failure
+  "watching": true,            // whether it is actively inferring right now
+  "alert": {                   // null until a sustained defect trips the watchdog
+    "score": 0.82, "action": "pause", "ts": 1720000000.0
+  }
+}
+```
+
+**Prediction vs defect score.** The **0–1 defect score** (`0.5` = decision boundary, higher
+= more defective) applies a monitor's `sensitivity` to the frame's distance margin, so it is
+**per-monitor, not on the camera**. It appears in:
+
+- the `result` events on the WebSocket and `GET /events`:
+  `{ "event": "result", "monitor_id", "camera_id", "score" (0–1), "prediction" (this
+  monitor's `threshold` applied), "margin", "ms", "ts" }`,
+- a monitor's `alert.score` once it trips, and
+- the MQTT *Defect score* sensor, published as `0–100` (the `0–1` score ×100).
+
+So: to poll one camera's current verdict, read `GET /cameras/{id}` → `last_result.prediction`;
+for the smoothed `0–1` score or a monitor's threshold-applied verdict, read the monitor or the
+`result` events.

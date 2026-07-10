@@ -7,6 +7,84 @@ release notes.
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-07-03
+
+### Added
+
+- **A desktop app for macOS and Windows — run a hub as an application.** PrintGuard now ships as a
+  native app that runs the full hub from your menu bar / system tray. Close the window and the hub
+  keeps watching, so it covers the multi-hour prints that matter; quit from the tray. The computer's
+  own webcams register straight on the hub — the app's window offers them under **Cameras →
+  This device**, and macOS asks for camera access the first time you register one — so they
+  keep watching with every window closed (Linux Docker hubs can still attach mapped
+  `/dev/video*` devices through the API). Reach it from your phone on the same network at `http://<computer>:8000`. Detection still runs entirely on
+  your own machine; no frame leaves your hardware. Turn on **Start at login** and forget about it.
+  Download it from the landing page or the
+  [Releases page](https://github.com/oliverbravery/PrintGuard/releases) — the builds are unsigned for
+  now, so the first launch needs a right-click → **Open** on macOS, or **More info → Run anyway** on
+  Windows. On Linux, run the Docker hub as before. When a newer version ships, the update dialog
+  offers the right download for your computer; the Docker hub keeps its pull instructions.
+
+- **Native notifications on the desktop app.** The macOS and Windows desktop app can now post
+  defect alerts to the operating system's own notification centre — with the snapshot attached —
+  so a native banner reaches you even with the window closed and no phone app set up. Turn on
+  **Desktop notification** under **Settings → Alerts** (it is offered only inside the desktop app,
+  next to ntfy, Telegram and Discord); on macOS, allow notifications for PrintGuard the first time
+  it asks. The Docker hub, which has no desktop of its own, keeps using the push channels.
+
+- **Prusa printers now connect over PrusaLink.** Register a Prusa printer — MK4, MK4S, MK3.9,
+  MK3.5, MINI, XL, CORE One, or an MK3/MK2.5 running PrusaLink on a Raspberry Pi — alongside
+  OctoPrint, Klipper and Bambu. PrintGuard reads its job, progress and state, gates inference
+  while it is idle, and can **pause or cancel** the print when a defect holds. Enable PrusaLink
+  on the printer, then link it with its URL and the password shown under Settings → Network →
+  PrusaLink (the username is `maker`). Everything stays on your network: PrintGuard talks to the
+  printer directly and never to Prusa's cloud, so **PrusaConnect is not involved**. Like Bambu,
+  Prusa is offered in **hub mode only**.
+
+- **Report a bug straight from the dashboard.** Hit the ⚑ chip in the header, describe what
+  happened, attach screenshots and optionally leave an email for follow-up — anonymously, no
+  account needed. Each report carries a diagnostics bundle (version, platform, configuration,
+  recent errors and warnings) with **every credential stripped**, and no camera frames unless
+  you attach them yourself. Nothing is ever sent unless you submit a report.
+
+- **Everything leaves a trace.** The hub now logs its whole lifecycle — boot, camera
+  attach/drop, printer actions, alerts, rejected API and socket attempts — to `docker logs`,
+  and the desktop app writes a self-rotating `printguard.log` beside its data, so problems on
+  a computer with no terminal can still be diagnosed. Bug reports automatically attach the
+  recent engine and interface logs, scrubbed of every credential, so a report carries the
+  story leading up to the bug. Set `LOG_LEVEL=DEBUG` for deeper traces when asked during
+  support.
+
+- **A detection history for every monitor.** Open a monitor's detail page to see its defect risk
+  charted over selectable periods, alongside a snapshot of every alert it fired — what the camera
+  saw at the moment PrintGuard acted.
+
+- **Monitor settings now explain themselves.** The alert threshold, sensitivity and
+  consecutive-detections sliders carry inline hints on what each one does and which way to move
+  it.
+
+- **The `/api/v1` read surface now describes its response bodies.** PrintGuard's API reference
+  (`docs/api.md`) documents the camera and monitor object shapes — including where a camera's
+  failure signal lives (`last_result.prediction`), since the smoothed 0–1 defect score is a
+  per-monitor quantity, not a field on the camera. The camera and monitor routes now carry
+  response schemas too, so the interactive `/api/v1/docs` shows the shapes instead of empty bodies.
+
+- **`POST /api/v1/classify` — score a single supplied frame.** Hand the model a frame directly
+  (POST the bytes as `image/jpeg`, `read` scope, optional `?sensitivity=`) and get back
+  `{prediction, distances, margin, defect_score}` — the same per-frame verdict the scheduler
+  produces for a registered camera, without registering one. Useful for an external orchestrator
+  that can reach a camera PrintGuard can't (e.g. a cloud tool tunnelling to a LAN printer), or an
+  agent wanting a one-off check. Exposed both over REST and as a `classify_frame` MCP tool, so an
+  agent can hand PrintGuard an image from the conversation and get a verdict back. Reuses the
+  engine's own inference; hub only.
+
+### Fixed
+
+- Registering a camera could report "no frames" even though the stream was healthy — the hub
+  gave a source eight seconds to produce a frame, which a freshly published "this device"
+  camera or a slow-starting stream often exceeds. Registration now waits out a cold start
+  before giving up.
+
 ## [2.2.2] - 2026-06-26
 
 ### Fixed

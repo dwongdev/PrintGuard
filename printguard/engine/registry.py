@@ -4,6 +4,7 @@ runtime state."""
 
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Generic, Protocol, TypeVar
@@ -11,6 +12,8 @@ from typing import Any, Generic, Protocol, TypeVar
 from .cameras import CAMERA_DEFAULTS
 from .monitors import monitor_watching
 from .platform import FrameSource
+
+logger = logging.getLogger(__name__)
 
 
 class _Identified(Protocol):
@@ -29,6 +32,7 @@ class Registry(Generic[T]):
     def add(self, item: T) -> None:
         """Registers a resource."""
         self.items[item.id] = item
+        logger.info("%s %s registered", type(item).__name__.lower(), item.id)
 
     def get(self, item_id: str) -> T | None:
         """Looks up a resource by id."""
@@ -36,7 +40,10 @@ class Registry(Generic[T]):
 
     def remove(self, item_id: str) -> T | None:
         """Deregisters a resource, returning it or None if absent."""
-        return self.items.pop(item_id, None)
+        item = self.items.pop(item_id, None)
+        if item is not None:
+            logger.info("%s %s removed", type(item).__name__.lower(), item_id)
+        return item
 
     def values(self) -> list[T]:
         """All registered resources."""

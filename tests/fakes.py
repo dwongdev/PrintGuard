@@ -36,13 +36,16 @@ class FakePlatform:
     workers = 1
     version = "2.1.0"
     update_repo: str | None = None
+    update_asset: str | None = None
 
     def __init__(self, infer_s: float = 0.05, failing: bool = False) -> None:
         self.infer_s = infer_s
         self.failing = failing
         self.device_status = "Printing"
         self.reject_actions = False
+        self.report_status = 200
         self.http_calls: list[tuple[str, str]] = []
+        self.http_requests: list[dict[str, Any]] = []
         self.releases: list[dict[str, Any]] = []
         self.state: dict[str, Any] = {}
 
@@ -62,14 +65,21 @@ class FakePlatform:
 
     async def http(self, method: str, url: str, **kwargs: Any) -> tuple[int, Any]:
         self.http_calls.append((method, url))
-        if urlparse(url).hostname == "api.github.com":
+        self.http_requests.append({"method": method, "url": url, **kwargs})
+        hostname = urlparse(url).hostname or ""
+        if hostname == "api.github.com":
             return 200, self.releases
+        if hostname == "sentry.io" or hostname.endswith(".sentry.io"):
+            return self.report_status, {}
         if self.reject_actions and method == "POST" and "/api/job" in url:
             raise RuntimeError("printer refused")
         return 200, {"state": self.device_status, "progress": {"completion": 40.0}, "job": {"file": {"name": "benchy.gcode"}}}
 
     async def encode_jpeg(self, rgb: np.ndarray) -> bytes | None:
         return b"\xff\xd8fake"
+
+    async def decode_jpeg(self, data: bytes) -> np.ndarray | None:
+        return np.zeros((48, 64, 3), dtype=np.uint8) if data.startswith(b"\xff\xd8") else None
 
     def load_state(self) -> dict[str, Any]:
         return self.state
