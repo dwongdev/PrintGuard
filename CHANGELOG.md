@@ -19,6 +19,13 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   with proprietary WebRTC signalling, including camera-streamer and Creality feeds, still
   need their MJPEG endpoint or a bridge such as go2rtc.
 
+### Fixed
+
+- **Updates now load the matching dashboard instead of a cached older one.** The HTML shell
+  is revalidated while Vite's content-hashed assets remain safely cached, so Docker browsers
+  pick up the new interface on reload. Desktop builds also open a versioned local URL, which
+  bypasses HTML cached by an earlier app version without erasing saved settings or camera state.
+
 ## [2.3.2] - 2026-07-10
 
 ### Fixed

@@ -24,6 +24,7 @@ from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconn
 from fastapi.responses import Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
+from starlette.types import Scope
 
 import printguard
 
@@ -42,6 +43,17 @@ logger = logging.getLogger(__name__)
 PACKAGE_ROOT = Path(printguard.__file__).parent
 REPO_ROOT = PACKAGE_ROOT.parent
 HLS_WARN_THROTTLE_S = 30.0
+REVALIDATE_CACHE_CONTROL = "no-cache"
+ASSET_CACHE_CONTROL = "public, max-age=31536000, immutable"
+
+
+class WebStaticFiles(StaticFiles):
+    """Serves the Vite shell with update-safe caching."""
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = ASSET_CACHE_CONTROL if path.startswith("assets/") else REVALIDATE_CACHE_CONTROL
+        return response
 
 
 def origin_allowed(websocket: WebSocket, allowed: set[str]) -> bool:
@@ -213,7 +225,7 @@ def create_app() -> FastAPI:
     app.mount("/mcp", mcp_app)
     app.mount("/models", StaticFiles(directory=model_dir), name="models")
     if static_dir.is_dir():
-        app.mount("/", StaticFiles(directory=static_dir, html=True), name="ui")
+        app.mount("/", WebStaticFiles(directory=static_dir, html=True), name="ui")
     return app
 
 
