@@ -30,7 +30,7 @@ flowchart LR
         browser["browser/platform.py<br/>Pyodide · LiteRT.js · getUserMedia · fetch"]
     end
 
-    server --- mediamtx["MediaMTX<br/>RTSP / RTMP / HLS"]
+    server --- mediamtx["MediaMTX<br/>RTSP / RTMP / WHEP / HLS"]
     integrations --- printersvc["OctoPrint / Moonraker / Bambu Lab"]
     notifiers --- push["ntfy / Telegram / Discord / native"]
 ```
@@ -44,7 +44,7 @@ needs but cannot implement portably. Identical signatures, different runtimes:
 |---|---|---|
 | `infer(rgb)` | ai-edge-litert on CPU threads | LiteRT.js in WASM via a JS bridge |
 | `discover_cameras()` | MediaMTX path list | `enumerateDevices()` |
-| `open_camera(id, source)` | PyAV reader thread per RTSP stream | `getUserMedia` + canvas grabs |
+| `open_camera(id, source)` | PyAV reader thread; MediaMTX pulls RTSP and WHEP streams | `getUserMedia` + canvas grabs |
 | `http(...)` | httpx | `fetch` (CORS applies) |
 | `encode_jpeg(rgb)` | PyAV mjpeg | canvas `toBlob` |
 | `load_state` / `save_state` | `data/state.json` | `localStorage` |

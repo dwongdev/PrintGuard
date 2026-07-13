@@ -46,8 +46,9 @@ export const GUIDE: GuideSection[] = [
     title: "Cameras",
     body: (
       <>
-        A camera is any video source PrintGuard can read — a USB or CSI device, an RTSP camera, or a
-        published WebRTC stream. Printers that expose a webcam register theirs automatically.
+        A camera is any video source PrintGuard can read — a USB or CSI device, an RTSP, MJPEG or
+        WebRTC (WHEP) stream URL, or a camera published from this device. Printers that expose a
+        webcam register theirs automatically.
       </>
     ),
     action: { label: "Open cameras", dialog: "cameras" },

@@ -274,7 +274,7 @@ function HubAdd({ onDone }: { onDone: () => void }) {
           <input className="field" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
           <input
             className="field"
-            placeholder="rtsp:// rtmp:// or http:// stream URL"
+            placeholder="rtsp:// rtmp:// http:// or whep:// stream URL"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
           />

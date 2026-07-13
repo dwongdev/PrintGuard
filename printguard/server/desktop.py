@@ -20,6 +20,7 @@ import socket
 import sys
 import threading
 import time
+from importlib import metadata
 from pathlib import Path
 
 import platformdirs
@@ -137,6 +138,10 @@ def _run_webview(url: str) -> None:
     webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
     webview.create_window(APP_NAME, url, width=1280, height=820)
     webview.start(private_mode=False, storage_path=os.path.join(os.environ["DATA_DIR"], "webview"))
+
+
+def _webview_url(port: int) -> str:
+    return f"http://localhost:{port}/?v={metadata.version('printguard')}"
 
 
 class _Window:
@@ -322,7 +327,7 @@ def main() -> None:
     port = int(os.environ.get("PORT", "8000"))
     server = _Server(port)
     server.start()
-    window = _Window(f"http://localhost:{port}")
+    window = _Window(_webview_url(port))
     window.open()
     if sys.platform == "darwin":
         _watch_termination(window, server)

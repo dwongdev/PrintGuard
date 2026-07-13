@@ -5,24 +5,32 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urlsplit
 
-_WEBRTC_SCHEMES = ("webrtc", "whep", "whip")
+_WEBRTC_SCHEMES = ("webrtc", "whep", "wheps", "whip", "whips")
+_WHEP_SCHEMES = ("whep", "wheps")
 _WEBRTC_PATH_SEGMENTS = frozenset({"webrtc", "whep", "whip"})
 
 
 def webrtc_endpoint(url: str) -> bool:
-    """Whether a stream URL is a WebRTC (WHEP/WHIP) endpoint FFmpeg cannot ingest.
+    """Whether a stream URL is a WebRTC signalling endpoint.
 
-    PrintGuard reads cameras with PyAV/FFmpeg, which speaks RTSP/RTMP and HTTP
-    MJPEG/HLS but not WebRTC. A feed is WebRTC when it uses an explicit signalling
-    scheme (``webrtc://``/``whep://``/``whip://``) or, over HTTP, carries a
-    signalling path segment such as ``/webrtc`` — camera-streamer serves its
-    WebRTC stream at ``/webcam/webrtc``. Relative URLs, as Moonraker may report,
-    are recognised too.
+    PyAV/FFmpeg cannot ingest WebRTC, so the hub routes WHEP endpoints through
+    MediaMTX while proprietary signalling remains unsupported. A feed is WebRTC
+    when it uses an explicit signalling scheme or carries a signalling path
+    segment such as camera-streamer's ``/webcam/webrtc``. Relative URLs, as
+    Moonraker may report, are recognised too.
     """
     parsed = urlsplit(url)
     if parsed.scheme in _WEBRTC_SCHEMES:
         return True
     return any(segment.lower() in _WEBRTC_PATH_SEGMENTS for segment in parsed.path.split("/"))
+
+
+def whep_endpoint(url: str) -> bool:
+    """Whether a URL explicitly identifies a WHEP WebRTC egress endpoint."""
+    parsed = urlsplit(url)
+    if parsed.scheme in _WHEP_SCHEMES:
+        return True
+    return parsed.scheme in ("", "http", "https") and parsed.path.rstrip("/").rsplit("/", 1)[-1].lower() == "whep"
 
 
 CAMERA_DEFAULTS: dict[str, Any] = {

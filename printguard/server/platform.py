@@ -27,7 +27,7 @@ from ai_edge_litert.interpreter import Interpreter
 from ..engine import vision
 from ..engine.platform import Frame
 from .bambu_camera import open_bambu_jpeg_stream
-from .mediamtx import MediaMTX
+from .mediamtx import MediaMTX, pull_source
 from .publish import H264Push
 
 FPS_SAMPLE_FRAMES = 25
@@ -393,12 +393,12 @@ class ServerPlatform:
     async def open_camera(self, camera_id: str, source: dict[str, Any]) -> AVSource:
         """Attaches to a stream, getting URL sources into MediaMTX for viewers.
 
-        RTSP/RTMP URLs are pulled by MediaMTX; HTTP/MJPEG ones, which it cannot
-        pull, are read directly and transcoded back into MediaMTX so both
-        inference and viewers see them. Device sources are the host's own
+        RTSP/RTMP URLs and WebRTC WHEP endpoints are pulled by MediaMTX;
+        HTTP/MJPEG ones are read directly and transcoded back into MediaMTX so
+        both inference and viewers see them. Device sources are the host's own
         cameras, captured through libavdevice in this process — not a browser
-        page — so on the desktop app they keep watching with every window
-        closed; they are republished the same way.
+        page — so on the desktop app they keep watching with every window closed;
+        they are republished the same way.
 
         The wait must outlast a freshly published path's cold start: the remux
         announcing the track, a not-found retry, the demuxer probe, a mid-GOP
@@ -416,12 +416,12 @@ class ServerPlatform:
             open_options = await asyncio.to_thread(_device_open_options, source["device_id"])
             publish_url = self.mediamtx.rtsp_url(camera_id)
         elif source["kind"] == "url":
-            source_url = source["url"]
-            if source_url.startswith(("http://", "https://")):
-                target = source_url
+            pulled = pull_source(source["url"])
+            if pulled is None:
+                target = source["url"]
                 publish_url = self.mediamtx.rtsp_url(camera_id)
             else:
-                await self.mediamtx.ensure_path(camera_id, source_url, source.get("fingerprint"))
+                await self.mediamtx.ensure_path(camera_id, pulled, source.get("fingerprint"))
                 target = self.mediamtx.rtsp_url(camera_id)
         elif source["kind"] == "path":
             target = self.mediamtx.rtsp_url(source["path"])
@@ -443,7 +443,7 @@ class ServerPlatform:
 
     async def release_camera(self, camera_id: str, source: dict[str, Any]) -> None:
         """Removes the MediaMTX path created for a URL-backed camera."""
-        if source["kind"] == "url" and not source["url"].startswith(("http://", "https://")):
+        if source["kind"] == "url" and pull_source(source["url"]) is not None:
             try:
                 await self.mediamtx.remove_path(camera_id)
             except Exception:

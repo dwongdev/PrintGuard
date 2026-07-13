@@ -7,6 +7,25 @@ release notes.
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.3] - 2026-07-13
+
+### Added
+
+- **WebRTC cameras with a WHEP endpoint can now be watched directly.** Paste a `whep://`
+  or `wheps://` URL into **Cameras → Stream URL** and PrintGuard pulls the original feed
+  through its bundled MediaMTX server, without converting it to MJPEG or adding another
+  service. This also gives go2rtc users a lower-overhead bridge for printer cameras: use
+  `whep://<go2rtc-host>:1984/api/webrtc?src=<stream>` instead of its MJPEG output. Cameras
+  with proprietary WebRTC signalling, including camera-streamer and Creality feeds, still
+  need their MJPEG endpoint or a bridge such as go2rtc.
+
+### Fixed
+
+- **Updates now load the matching dashboard instead of a cached older one.** The HTML shell
+  is revalidated while Vite's content-hashed assets remain safely cached, so Docker browsers
+  pick up the new interface on reload. Desktop builds also open a versioned local URL, which
+  bypasses HTML cached by an earlier app version without erasing saved settings or camera state.
+
 ## [2.3.2] - 2026-07-10
 
 ### Fixed

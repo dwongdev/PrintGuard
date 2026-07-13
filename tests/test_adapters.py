@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from printguard.engine import vision
-from printguard.engine.cameras import webrtc_endpoint
+from printguard.engine.cameras import webrtc_endpoint, whep_endpoint
 from printguard.engine.integrations import INTEGRATIONS, DeviceAction, DeviceStatus
 from printguard.engine.monitors import monitor_watching, sanitise_monitor
 from printguard.engine.notifiers import NOTIFIERS
@@ -308,12 +308,13 @@ async def test_klipper_webrtc_without_snapshot_derives_mjpeg_from_stream_path() 
     assert cams[0]["source"]["url"] == "http://kl/webcam/stream", "absent a snapshot URL the MJPEG path is derived from the WebRTC path"
 
 
-async def test_klipper_skips_webrtc_with_no_ingestible_endpoint() -> None:
+async def test_klipper_preserves_whep_endpoint() -> None:
     body = {"result": {"webcams": [
-        {"name": "WHEP", "uid": "u1", "stream_url": "whep://kl/webcam", "enabled": True},
+        {"name": "WHEP", "uid": "u1", "stream_url": "/webcam/whep", "enabled": True},
     ]}}
-    assert await INTEGRATIONS["klipper"].cameras(RecordingHttp(body=body), {"base_url": "http://kl"}) == [], \
-        "a feed that stays WebRTC with no derivable MJPEG is skipped, never registered as a dead camera"
+    assert await INTEGRATIONS["klipper"].cameras(RecordingHttp(body=body), {"base_url": "http://kl"}) == [
+        {"key": "u1", "name": "WHEP", "source": {"kind": "url", "url": "http://kl/webcam/whep"}}
+    ]
 
 
 async def test_klipper_without_webcams_api_exposes_nothing() -> None:
@@ -333,8 +334,24 @@ async def test_klipper_without_webcams_api_exposes_nothing() -> None:
         ("http://pi:8080/stream", False),
     ],
 )
-def test_webrtc_endpoint_flags_only_uningestible_streams(url: str, is_webrtc: bool) -> None:
+def test_webrtc_endpoint_flags_signalling_urls(url: str, is_webrtc: bool) -> None:
     assert webrtc_endpoint(url) is is_webrtc
+
+
+@pytest.mark.parametrize(
+    "url, is_whep",
+    [
+        ("whep://pi:8889/cam/whep", True),
+        ("wheps://pi:8889/cam/whep", True),
+        ("https://pi:8889/cam/whep", True),
+        ("/cam/whep", True),
+        ("http://pi/webcam/webrtc", False),
+        ("webrtc://pi/stream", False),
+        ("whip://pi/stream", False),
+    ],
+)
+def test_whep_endpoint_requires_explicit_whep_egress(url: str, is_whep: bool) -> None:
+    assert whep_endpoint(url) is is_whep
 
 
 BAMBU_CONFIG = {"host": "192.168.1.70", "serial": "01S00A", "access_code": "12345678"}
