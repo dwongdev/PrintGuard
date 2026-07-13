@@ -17,7 +17,7 @@ from collections import deque
 from typing import Any, Callable
 
 from . import reports, updates, vision
-from .cameras import sanitise_camera, webrtc_endpoint
+from .cameras import sanitise_camera
 from .history import MonitorHistory
 from .integrations import INTEGRATIONS, DeviceAction, integrations_meta
 from .monitors import monitor_watching, persisted_monitor, sanitise_monitor
@@ -38,8 +38,6 @@ RECENT_EVENTS_MAX = 100
 RECENT_EVENT_TYPES = ("alert", "warning", "device", "error")
 EVENT_LOG_LEVELS = {"alert": logging.INFO, "warning": logging.WARNING, "error": logging.ERROR, "device": logging.DEBUG}
 UPDATE_CHECK_INTERVAL_S = 86400.0
-WEBRTC_UNSUPPORTED = "WebRTC streams (WHEP/WHIP) can't be read — use the MJPEG (…?action=stream) or RTSP URL instead."
-
 SETTINGS_DEFAULTS: dict[str, Any] = {"notifiers": {}, "update_check": True, "mqtt": {}, "theme": "system", "themes": [], "layout": {}}
 
 
@@ -389,8 +387,6 @@ class Engine:
 
     async def _cmd_camera_add(self, message: dict[str, Any]) -> None:
         source = dict(message["source"])
-        if source.get("kind") == "url" and webrtc_endpoint(str(source.get("url") or "")):
-            raise ValueError(WEBRTC_UNSUPPORTED)
         camera_id = uuid.uuid4().hex[:8]
         camera = Camera(
             id=camera_id,
@@ -474,9 +470,6 @@ class Engine:
             if self.cameras.get(camera_id):
                 continue
             source = dict(descriptor["source"])
-            if source.get("kind") == "url" and webrtc_endpoint(str(source.get("url") or "")):
-                self.emit({"event": "warning", "printer_id": printer.id, "message": f"{descriptor['name']}: {WEBRTC_UNSUPPORTED}"})
-                continue
             camera = Camera(id=camera_id, name=descriptor["name"], source=source, printer_id=printer.id, max_fps=15.0)
             try:
                 source = await self.platform.open_camera(camera_id, camera.source)

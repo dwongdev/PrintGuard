@@ -232,26 +232,24 @@ async def test_printer_camera_registers_cascades_and_is_managed(monkeypatch) -> 
         assert engine.cameras.get(camera.id) is None, "removing the printer drops its camera"
 
 
-async def test_camera_add_rejects_webrtc_url() -> None:
+async def test_camera_add_delegates_whep_url_to_platform() -> None:
     platform = FakePlatform()
     async with running_engine(platform, camera_fps=[]) as (engine, events):
-        await engine.handle({"cmd": "camera.add", "name": "Cam", "source": {"kind": "url", "url": "http://pi/webcam/webrtc"}, "req_id": 5})
-        assert engine.cameras.values() == [], "a WebRTC stream is never registered as a camera"
-        assert any(e["event"] == "error" and e.get("req_id") == 5 and "WebRTC" in e["message"] for e in events)
+        await engine.handle({"cmd": "camera.add", "name": "Cam", "source": {"kind": "url", "url": "whep://pi:8889/cam/whep"}, "req_id": 5})
+        assert [camera.name for camera in engine.cameras.values()] == ["Cam"]
+        assert not any(event["event"] == "error" and event.get("req_id") == 5 for event in events)
 
 
-async def test_printer_webrtc_camera_warns_instead_of_silently_skipping(monkeypatch) -> None:
+async def test_printer_whep_camera_registers_via_platform(monkeypatch) -> None:
     platform = FakePlatform()
-    async with running_engine(platform, camera_fps=[]) as (engine, events):
+    async with running_engine(platform, camera_fps=[]) as (engine, _):
         async def webrtc_cameras(http, config):
-            return [{"key": "webcam", "name": "Chamber", "source": {"kind": "url", "url": "http://pi/webcam/webrtc"}}]
+            return [{"key": "webcam", "name": "Chamber", "source": {"kind": "url", "url": "whep://pi:8889/chamber/whep"}}]
 
         monkeypatch.setattr(INTEGRATIONS["octoprint"], "cameras", webrtc_cameras)
         await _register_printer(engine)
         await asyncio.sleep(0.1)  # printer.add reconciles its cameras in the background
-        assert engine.cameras.values() == [], "a WebRTC feed exposed by a printer is not registered"
-        assert any(e["event"] == "warning" and "WebRTC" in e["message"] for e in events), \
-            "the user is told why a WebRTC feed was skipped rather than it silently no-opping"
+        assert [camera.name for camera in engine.cameras.values()] == ["Chamber"]
 
 
 async def test_orphaned_managed_camera_can_be_removed() -> None:

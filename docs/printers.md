@@ -27,7 +27,7 @@ These cameras are managed by their printer and removed with it.
 
 Beyond printer webcams, a hub takes cameras three ways:
 
-- **Stream URL** — any RTSP/RTMP/HTTP source; PrintGuard creates a MediaMTX pull path.
+- **Stream URL** — any RTSP, RTMP, HTTP/MJPEG or WHEP source; PrintGuard creates a MediaMTX pull path.
 - **This device** — publishes a browser camera to the hub over a WebSocket. It reconnects if
   the hub restarts and resumes when you reopen the page on that device. Browsers only allow
   camera access on secure pages, so this (and local mode) needs the hub served over HTTPS or

@@ -8,15 +8,30 @@ from __future__ import annotations
 import asyncio
 import logging
 from typing import Any
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
+
+from ..engine.cameras import webrtc_endpoint, whep_endpoint
 
 logger = logging.getLogger(__name__)
 
 READY_TIMEOUT_S = 10.0
 RESTART_DELAY_S = 2.0
 STOP_TIMEOUT_S = 5.0
+
+
+def pull_source(url: str) -> str | None:
+    """Returns the MediaMTX pull URL, or None when the hub reads it directly."""
+    parts = urlsplit(url)
+    if whep_endpoint(url):
+        scheme = "wheps" if parts.scheme in ("https", "wheps") else "whep"
+        return urlunsplit((scheme, parts.netloc, parts.path, parts.query, parts.fragment))
+    if webrtc_endpoint(url):
+        raise ValueError("WebRTC source does not expose WHEP — use its WHEP, MJPEG or RTSP URL instead")
+    if parts.scheme in ("http", "https"):
+        return None
+    return url
 
 
 class MediaMTX:

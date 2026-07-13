@@ -58,7 +58,7 @@ class FakePlatform:
         return []
 
     async def open_camera(self, camera_id: str, source: dict[str, Any]) -> FakeSource:
-        return FakeSource(float(source["fps"]))
+        return FakeSource(float(source.get("fps", 15.0)))
 
     async def release_camera(self, camera_id: str, source: dict[str, Any]) -> None:
         pass

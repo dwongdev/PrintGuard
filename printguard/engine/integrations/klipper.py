@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
-from ..cameras import webrtc_endpoint
+from ..cameras import webrtc_endpoint, whep_endpoint
 from .base import DeviceAction, DeviceState, DeviceStatus, HttpFn, IntegrationAdapter
 
 _STATUS_MAP = {
@@ -78,9 +78,9 @@ class KlipperAdapter(IntegrationAdapter):
 
         Each webcam's stream_url may be relative, resolved against the host's web
         port (see ``_resolve``); its stable uid keys the registered camera.
-        Webcams whose service advertises only a WebRTC stream — camera-streamer,
-        the Crowsnest V5 default — are redirected to their MJPEG endpoint, which
-        FFmpeg can read, and skipped if no such endpoint can be derived.
+        Webcams whose service advertises proprietary WebRTC signalling —
+        camera-streamer, the Crowsnest V5 default — are redirected to their
+        MJPEG endpoint. WHEP endpoints pass through to the hub's MediaMTX client.
         """
         status, body = await http("GET", f"{config['base_url'].rstrip('/')}/server/webcams/list", headers=self._headers(config))
         if status != 200 or not isinstance(body, dict):
@@ -90,9 +90,9 @@ class KlipperAdapter(IntegrationAdapter):
             if not webcam.get("enabled", True):
                 continue
             stream = str(webcam.get("stream_url") or "")
-            if "webrtc" in str(webcam.get("service") or "").lower() or webrtc_endpoint(stream):
+            if ("webrtc" in str(webcam.get("service") or "").lower() or webrtc_endpoint(stream)) and not whep_endpoint(stream):
                 stream = _mjpeg_endpoint(webcam)
-            if not stream or webrtc_endpoint(stream):
+            if not stream or (webrtc_endpoint(stream) and not whep_endpoint(stream)):
                 continue
             found.append(
                 {
