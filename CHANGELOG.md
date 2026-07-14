@@ -19,6 +19,12 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   enter the access code shown in the printer's network settings. Elegoo control is available in
   hub and desktop mode, keeps all traffic on your LAN, and never uses Elegoo's cloud.
 
+### Fixed
+
+- **Mobile pages no longer widen around connection errors or install controls.** Long printer
+  test errors wrap inside their dialog, while the landing page keeps desktop download buttons
+  and Docker commands within the viewport.
+
 ## [2.3.3] - 2026-07-13
 
 ### Added

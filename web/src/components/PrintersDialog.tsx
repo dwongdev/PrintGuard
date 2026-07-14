@@ -25,12 +25,12 @@ function MixedContentNote() {
 function TestRow({ provider, config }: { provider: string; config: Record<string, string> }) {
   const { printerTest, testing, testPrinter } = useStore();
   return (
-    <div className="flex items-center gap-3">
+    <div className="flex min-w-0 items-center gap-3">
       <button className="btn" disabled={!provider || testing} onClick={() => testPrinter(provider, config)}>
         {testing ? "Testing…" : "Test connection"}
       </button>
       {printerTest?.ok && <span className="chip chip-ok">ok — {printerTest.status}</span>}
-      {printerTest && !printerTest.ok && <span className="chip chip-bad">{printerTest.error || printerTest.status || "failed"}</span>}
+      {printerTest && !printerTest.ok && <span className="chip chip-bad chip-message">{printerTest.error || printerTest.status || "failed"}</span>}
     </div>
   );
 }
