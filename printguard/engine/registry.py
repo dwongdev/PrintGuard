@@ -149,7 +149,7 @@ class Printer:
     Attributes:
         id: Stable identifier used across the protocol.
         name: Display name.
-        provider: Integration adapter id (octoprint, klipper, bambu, …).
+        provider: Integration adapter id (octoprint, klipper, elegoo, prusa, bambu, …).
         config: Connection values matching the adapter's schema.
         device_state: Last normalised state polled from the service, or None.
     """

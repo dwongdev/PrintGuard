@@ -139,7 +139,7 @@ Credentials are redacted from this read surface: any printer or notifier config 
 adapter marks secret (API keys, access codes, bot tokens) is stripped from every REST and
 MCP response; only the dashboard's own WebSocket, behind your proxy, receives them.
 
-Every printer integration (OctoPrint, Klipper/Moonraker, Bambu Lab, …) is normalised to one
+Every printer integration (OctoPrint, Klipper/Moonraker, Elegoo, PrusaLink, Bambu Lab, …) is normalised to one
 shape, so a printer reads and controls the same way regardless of its service.
 
 - **Status** — one of `printing`, `paused`, `idle`, `error`, `offline`, `unknown`.

@@ -7,6 +7,7 @@ and the networking caveats that trip people up.
 
 Register a printer — [OctoPrint](https://octoprint.org),
 [Klipper (Moonraker)](https://moonraker.readthedocs.io),
+[Elegoo](https://github.com/ELEGOO-3D/elegoo-link),
 [Prusa (PrusaLink)](https://help.prusa3d.com/guide/wi-fi-and-prusa-connect-link-setup-core-one-mk4-s-mk3-9-mk3-5-xl-mini_413293)
 or [Bambu Lab](https://github.com/Doridian/OpenBambuAPI) — in the printer registry and test the
 connection there, then bind it to a monitor. A monitor's detail panel chooses what a
@@ -19,9 +20,10 @@ printer costs you nothing.
 If a registered printer exposes a webcam, PrintGuard registers it as a camera automatically
 — no stream URL to copy. The camera registry's **Printer cameras** tab lists them, and a
 **Refresh** button picks up any camera attached to a printer after it was registered. This
-covers OctoPrint and Moonraker webcam streams and the Bambu chamber camera (over RTSP on the
-X1/H2 series, or the proprietary port-6000 protocol on the A1/P1 series, hub mode only).
-These cameras are managed by their printer and removed with it.
+covers OctoPrint and Moonraker webcam streams, the Centauri Carbon chamber camera, and the
+Bambu chamber camera (over RTSP on the X1/H2 series, or the proprietary port-6000 protocol on
+the A1/P1 series, hub mode only). These cameras are managed by their printer and removed with
+it.
 
 ## Hub mode cameras
 
@@ -42,6 +44,19 @@ are offered in **hub mode only**. On the printer, enable **LAN Only Mode** then 
 Mode** (Settings → Network) to open the MQTT channel, then link it with its IP, serial number
 and access code; the form links Bambu's
 [Enable LAN Mode](https://wiki.bambulab.com/en/knowledge-sharing/enable-lan-mode) guide.
+
+## Elegoo
+
+Elegoo control is offered in **hub mode only**. Select the Centauri family for the original
+Centauri Carbon or Centauri Carbon 2; PrintGuard detects which local protocol the printer uses
+and automatically registers its chamber camera. The Carbon 2 must have **LAN Only Mode** enabled
+under its network settings and needs the access code shown there. The original Carbon needs only
+its IP address.
+
+Select the Neptune/OrangeStorm family for the Neptune 4 Pro, Plus or Max, OrangeStorm Giga, or
+another Elegoo printer running Moonraker. PrintGuard uses the stock Moonraker service on port
+`7125` and accepts an API key if you configured one. All state, camera and control traffic stays
+between PrintGuard and the printer on your LAN; Elegoo's cloud is not involved.
 
 ## Prusa
 

@@ -21,14 +21,25 @@ export function SchemaForm({
             {prop.title}
             {required.includes(key) && <span className="text-accent"> *</span>}
           </span>
-          <input
-            className="field"
-            type={prop.secret ? "password" : "text"}
-            placeholder={prop.placeholder}
-            value={value[key] ?? ""}
-            autoComplete="off"
-            onChange={(e) => onChange({ ...value, [key]: e.target.value })}
-          />
+          {prop.enum ? (
+            <select className="field" value={value[key] ?? ""} onChange={(e) => onChange({ ...value, [key]: e.target.value })}>
+              <option value="">Select…</option>
+              {prop.enum.map((option, index) => (
+                <option key={option} value={option}>
+                  {prop.enum_labels?.[index] ?? option}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              className="field"
+              type={prop.secret ? "password" : "text"}
+              placeholder={prop.placeholder}
+              value={value[key] ?? ""}
+              autoComplete="off"
+              onChange={(e) => onChange({ ...value, [key]: e.target.value })}
+            />
+          )}
         </label>
       ))}
       <a href={meta.setup_url ?? meta.docs_url} target="_blank" rel="noreferrer" className="mono text-[0.64rem] text-text-2 hover:text-accent inline-block">

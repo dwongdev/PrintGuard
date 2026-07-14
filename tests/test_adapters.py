@@ -4,6 +4,7 @@ multipart encoding, printer sanitisation and the vision score maths."""
 from __future__ import annotations
 
 import json as jsonlib
+from types import SimpleNamespace
 from typing import Any
 
 import numpy as np
@@ -430,6 +431,114 @@ async def test_bambu_without_a_camera_exposes_nothing(monkeypatch) -> None:
 def test_bambu_runs_in_hub_mode_only() -> None:
     assert INTEGRATIONS["bambu"].browser_ok is False
     assert INTEGRATIONS["octoprint"].browser_ok is True
+
+
+ELEGOO_CENTAURI_CONFIG = {"family": "centauri", "host": "192.168.1.90", "access_code": "Ab3dEf"}
+ELEGOO_MOONRAKER_CONFIG = {"family": "moonraker", "host": "192.168.1.91", "api_key": "secret"}
+
+
+class FakeCentauri:
+    """pycentauri client stand-in for adapter contract tests."""
+
+    def __init__(self, print_status: int = 13, camera_port: int = 3031) -> None:
+        self.state = SimpleNamespace(print_status=print_status, progress=42, filename="boat.gcode")
+        self.camera_port = camera_port
+        self.actions: list[str] = []
+        self.closed = False
+
+    async def status(self) -> Any:
+        return self.state
+
+    async def pause(self) -> None:
+        self.actions.append("pause")
+
+    async def resume(self) -> None:
+        self.actions.append("resume")
+
+    async def stop(self) -> None:
+        self.actions.append("stop")
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+def _fake_centauri(client: FakeCentauri, controls: list[bool] | None = None):
+    async def connect(config: dict[str, Any], *, enable_control: bool = False) -> FakeCentauri:
+        if controls is not None:
+            controls.append(enable_control)
+        return client
+
+    return connect
+
+
+@pytest.mark.parametrize(
+    ("print_status", "expected"),
+    [
+        (13, DeviceStatus.PRINTING),
+        (27, DeviceStatus.PRINTING),
+        (6, DeviceStatus.PAUSED),
+        (0, DeviceStatus.IDLE),
+        (9, DeviceStatus.IDLE),
+        (14, DeviceStatus.ERROR),
+        (99, DeviceStatus.UNKNOWN),
+    ],
+)
+async def test_elegoo_centauri_normalises_states(monkeypatch, print_status: int, expected: DeviceStatus) -> None:
+    client = FakeCentauri(print_status)
+    monkeypatch.setattr(INTEGRATIONS["elegoo"], "_connect_centauri", _fake_centauri(client))
+    state = await INTEGRATIONS["elegoo"].fetch_state(None, ELEGOO_CENTAURI_CONFIG)
+    assert state.status is expected
+    assert state.progress == 42.0
+    assert state.job == "boat.gcode"
+    assert client.closed
+
+
+async def test_elegoo_centauri_actions_enable_control(monkeypatch) -> None:
+    client = FakeCentauri()
+    controls: list[bool] = []
+    monkeypatch.setattr(INTEGRATIONS["elegoo"], "_connect_centauri", _fake_centauri(client, controls))
+    for action in (DeviceAction.PAUSE, DeviceAction.RESUME, DeviceAction.CANCEL):
+        await INTEGRATIONS["elegoo"].send(None, ELEGOO_CENTAURI_CONFIG, action)
+    assert client.actions == ["pause", "resume", "stop"]
+    assert controls == [True, True, True]
+
+
+@pytest.mark.parametrize(
+    ("port", "url"),
+    [(3031, "http://192.168.1.90:3031/video"), (8080, "http://192.168.1.90:8080/video")],
+)
+async def test_elegoo_centauri_exposes_built_in_camera(monkeypatch, port: int, url: str) -> None:
+    monkeypatch.setattr(INTEGRATIONS["elegoo"], "_connect_centauri", _fake_centauri(FakeCentauri(camera_port=port)))
+    cameras = await INTEGRATIONS["elegoo"].cameras(None, ELEGOO_CENTAURI_CONFIG)
+    assert cameras == [
+        {"key": "chamber", "name": "Chamber camera", "source": {"kind": "url", "url": url}}
+    ]
+
+
+async def test_elegoo_moonraker_reuses_klipper_protocol() -> None:
+    body = {
+        "result": {
+            "status": {
+                "print_stats": {"state": "printing", "filename": "part.gcode"},
+                "virtual_sdcard": {"progress": 0.5},
+            }
+        }
+    }
+    http = RecordingHttp(body=body)
+    state = await INTEGRATIONS["elegoo"].fetch_state(http, ELEGOO_MOONRAKER_CONFIG)
+    assert state.status is DeviceStatus.PRINTING
+    assert state.progress == 50.0
+    assert http.last["url"] == "http://192.168.1.91:7125/printer/objects/query?print_stats&virtual_sdcard"
+    assert http.last["headers"] == {"X-Api-Key": "secret"}
+    await INTEGRATIONS["elegoo"].send(http, ELEGOO_MOONRAKER_CONFIG, DeviceAction.PAUSE)
+    assert http.last["url"] == "http://192.168.1.91:7125/printer/print/pause"
+
+
+def test_elegoo_runs_in_hub_mode_only() -> None:
+    adapter = INTEGRATIONS["elegoo"]
+    assert adapter.browser_ok is False
+    assert adapter.schema["properties"]["family"]["enum"] == ["centauri", "moonraker"]
+    assert adapter.secret_keys() == {"access_code", "api_key"}
 
 
 PRUSA_CONFIG = {"base_url": "http://192.168.1.80", "password": "secret"}
