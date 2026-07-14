@@ -126,6 +126,8 @@ export interface SchemaProperty {
   format?: string;
   secret?: boolean;
   placeholder?: string;
+  enum?: string[];
+  enum_labels?: string[];
 }
 
 export interface AdapterMeta {
