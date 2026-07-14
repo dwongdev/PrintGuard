@@ -31,7 +31,7 @@ flowchart LR
     end
 
     server --- mediamtx["MediaMTX<br/>RTSP / RTMP / WHEP / HLS"]
-    integrations --- printersvc["OctoPrint / Moonraker / Bambu Lab"]
+    integrations --- printersvc["OctoPrint / Moonraker / Elegoo / Bambu Lab"]
     notifiers --- push["ntfy / Telegram / Discord / native"]
 ```
 
@@ -63,17 +63,17 @@ Every command may carry a `req_id`, echoed on the responding event so the UI can
 pending requests.
 
 A **camera** is a video source and a **printer** is a control-service connection
-(OctoPrint/Klipper/Bambu); both are registered resources, created and deleted only in
+(OctoPrint/Klipper/Elegoo/Bambu); both are registered resources, created and deleted only in
 their registry. A **monitor** binds one of each (the printer is optional) and carries the
 inference thresholds and defect-response policy.
 
 A printer integration that exposes a webcam registers it automatically as a camera owned
-by that printer (`Camera.printer_id`): the OctoPrint and Moonraker stream URLs, and the
-Bambu chamber camera (RTSP for X1/H2, the proprietary port-6000 protocol for A1/P1). The
-adapter's optional `cameras()` declares them and the engine reconciles them on printer
-add/update, and on demand via `printer.cameras.refresh` (the camera registry's Printer
-cameras tab) to pick up a camera attached later. Such cameras can't be removed on their
-own and are dropped with their printer.
+by that printer (`Camera.printer_id`): the OctoPrint and Moonraker stream URLs, the Elegoo
+Centauri chamber camera, and the Bambu chamber camera (RTSP for X1/H2, the proprietary
+port-6000 protocol for A1/P1). The adapter's optional `cameras()` declares them and the
+engine reconciles them on printer add/update, and on demand via `printer.cameras.refresh`
+(the camera registry's Printer cameras tab) to pick up a camera attached later. Such cameras
+can't be removed on their own and are dropped with their printer.
 
 Events (engine → UI): a full `state` snapshot (on connect, after every command, and on a
 1 s ticker; it carries the running version and any available update), plus incremental
@@ -200,7 +200,7 @@ printguard/
     monitors.py      monitor config: a camera + printer pairing and its thresholds
     printers.py      registered-printer (integration connection) validation
     watchdog.py      defect response: streaks, printer actions, notifications, health
-    integrations/    printer service adapters (OctoPrint, Klipper, Bambu Lab, …)
+    integrations/    printer service adapters (OctoPrint, Klipper, Elegoo, Bambu Lab, …)
     notifiers/       alert channel adapters (ntfy, Telegram, Discord, native desktop, …)
     adapters.py      shared adapter contract (id, label, docs_url, JSON-schema config)
   server/            hub platform: FastAPI, bundled MediaMTX (child process), LiteRT, PyAV

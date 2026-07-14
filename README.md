@@ -27,7 +27,7 @@ real, [jump to Quick start](#quick-start).
 - **Failures caught early** — a compact vision model scores every frame and acts the moment a
   defect holds, so spaghetti and detachments don't run for hours (or burn through a spool).
 - **Damage stopped for you** — a sustained defect can pause or cancel the print through
-  OctoPrint, Klipper, Prusa (PrusaLink) or Bambu Lab, with sensitivity, thresholds and
+  OctoPrint, Klipper, Elegoo, Prusa (PrusaLink) or Bambu Lab, with sensitivity, thresholds and
   cooldowns you set per monitor.
 - **A heads-up on your phone** — the instant a defect holds, a snapshot lands over ntfy,
   Telegram or Discord.
@@ -121,12 +121,13 @@ as the container, in a native window on (and never leaving) your own computer.
 
 ## Printers, cameras and alerts
 
-Register your printer — OctoPrint, Klipper (Moonraker), Prusa (PrusaLink) or Bambu Lab — bind it to a monitor,
-and choose what a sustained defect does: alert, pause or cancel. If a printer exposes a webcam,
-PrintGuard adds it as a camera for you. Turn on ntfy, Telegram, Discord, or (in the desktop app)
-native OS notifications in **Settings** to get snapshot alerts and watchdog warnings.
+Register your printer — OctoPrint, Klipper (Moonraker), Elegoo, Prusa (PrusaLink) or Bambu Lab —
+bind it to a monitor, and choose what a sustained defect does: alert, pause or cancel. If a
+printer exposes a webcam, PrintGuard adds it as a camera for you. Turn on ntfy, Telegram,
+Discord, or (in the desktop app) native OS notifications in **Settings** to get snapshot alerts
+and watchdog warnings.
 
-Connecting over Docker or HTTPS, or linking a Bambu printer, has a few gotchas — the full
+Connecting over Docker or HTTPS, or linking an Elegoo or Bambu printer, has a few gotchas — the full
 walk-through (and webcam/camera options) lives in **[docs/printers.md](docs/printers.md)**.
 
 ## Exposing a hub safely

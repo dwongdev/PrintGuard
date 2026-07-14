@@ -7,6 +7,18 @@ release notes.
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.4] - 2026-07-14
+
+### Added
+
+- **Elegoo printers can now be monitored and controlled directly on the local network.**
+  Register a Centauri Carbon or Centauri Carbon 2 to read its job, progress and state,
+  automatically add its chamber camera, and let PrintGuard pause or cancel a failed print.
+  The same Elegoo option covers Neptune 4 Pro/Plus/Max and OrangeStorm Giga printers through
+  their stock Moonraker service. Centauri Carbon 2 owners need to enable **LAN Only Mode** and
+  enter the access code shown in the printer's network settings. Elegoo control is available in
+  hub and desktop mode, keeps all traffic on your LAN, and never uses Elegoo's cloud.
+
 ## [2.3.3] - 2026-07-13
 
 ### Added
