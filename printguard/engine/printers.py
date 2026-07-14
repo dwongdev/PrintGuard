@@ -1,7 +1,7 @@
 """Printer configuration: validation for registered integrated printers.
 
 A printer is a connection to a control service (OctoPrint, Klipper/Moonraker,
-Bambu, …) identified by an integration provider and its schema-driven config.
+Elegoo, PrusaLink, Bambu, …) identified by an integration provider and its schema-driven config.
 """
 
 from __future__ import annotations

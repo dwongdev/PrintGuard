@@ -127,7 +127,7 @@ printer exposes a webcam, PrintGuard adds it as a camera for you. Turn on ntfy, 
 Discord, or (in the desktop app) native OS notifications in **Settings** to get snapshot alerts
 and watchdog warnings.
 
-Connecting over Docker or HTTPS, or linking an Elegoo or Bambu printer, has a few gotchas — the full
+Connecting over Docker or HTTPS, or linking an Elegoo, Prusa or Bambu printer, has a few gotchas — the full
 walk-through (and webcam/camera options) lives in **[docs/printers.md](docs/printers.md)**.
 
 ## Exposing a hub safely

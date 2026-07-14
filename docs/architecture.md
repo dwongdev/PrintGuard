@@ -31,7 +31,7 @@ flowchart LR
     end
 
     server --- mediamtx["MediaMTX<br/>RTSP / RTMP / WHEP / HLS"]
-    integrations --- printersvc["OctoPrint / Moonraker / Elegoo / Bambu Lab"]
+    integrations --- printersvc["OctoPrint / Moonraker / Elegoo / PrusaLink / Bambu Lab"]
     notifiers --- push["ntfy / Telegram / Discord / native"]
 ```
 
@@ -63,7 +63,7 @@ Every command may carry a `req_id`, echoed on the responding event so the UI can
 pending requests.
 
 A **camera** is a video source and a **printer** is a control-service connection
-(OctoPrint/Klipper/Elegoo/Bambu); both are registered resources, created and deleted only in
+(OctoPrint/Klipper/Elegoo/PrusaLink/Bambu); both are registered resources, created and deleted only in
 their registry. A **monitor** binds one of each (the printer is optional) and carries the
 inference thresholds and defect-response policy.
 
@@ -200,7 +200,7 @@ printguard/
     monitors.py      monitor config: a camera + printer pairing and its thresholds
     printers.py      registered-printer (integration connection) validation
     watchdog.py      defect response: streaks, printer actions, notifications, health
-    integrations/    printer service adapters (OctoPrint, Klipper, Elegoo, Bambu Lab, …)
+    integrations/    printer service adapters (OctoPrint, Klipper, Elegoo, PrusaLink, Bambu Lab, …)
     notifiers/       alert channel adapters (ntfy, Telegram, Discord, native desktop, …)
     adapters.py      shared adapter contract (id, label, docs_url, JSON-schema config)
   server/            hub platform: FastAPI, bundled MediaMTX (child process), LiteRT, PyAV
