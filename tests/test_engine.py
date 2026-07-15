@@ -194,16 +194,25 @@ async def test_protocol_surfaces_errors_and_filters_settings() -> None:
         assert engine.settings["layout"] == layout, "layout settings survive a restart"
 
 
-async def test_provider_change_clears_stale_printer_state() -> None:
+async def test_provider_change_clears_stale_printer_state(monkeypatch) -> None:
     platform = FakePlatform()
+    closed: list[dict | None] = []
+
+    async def close(config=None):
+        closed.append(config)
+
+    monkeypatch.setattr(INTEGRATIONS["octoprint"], "close", close)
     async with running_engine(platform, camera_fps=[10.0]) as (engine, _):
         printer_id = await _register_printer(engine)
         engine.printers.get(printer_id).device_state = {"status": "printing", "progress": 1.0, "job": None}
         await engine.handle({"cmd": "printer.update", "id": printer_id, "patch": {"name": "Renamed"}})
         assert engine.printers.get(printer_id).device_state["status"] == "printing", "same provider must keep its state"
+        assert closed == []
 
         await engine.handle({"cmd": "printer.update", "id": printer_id, "patch": {"provider": "klipper", "config": {"base_url": "http://kl"}}})
         assert engine.printers.get(printer_id).device_state is None, "a new provider must not inherit the old state"
+        assert closed == [OCTOPRINT["config"]]
+    assert closed == [OCTOPRINT["config"], None]
 
 
 async def test_printer_camera_registers_cascades_and_is_managed(monkeypatch) -> None:

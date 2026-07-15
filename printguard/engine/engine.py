@@ -136,6 +136,7 @@ class Engine:
             task.cancel()
         for camera_id in list(self.cameras.items):
             self.cameras.remove(camera_id)
+        await asyncio.gather(*(adapter.close() for adapter in INTEGRATIONS.values()))
         logger.info("engine stopped")
 
     def add_sink(self, sink: Callable[[dict[str, Any]], None]) -> None:
@@ -496,6 +497,8 @@ class Engine:
         if not existing:
             raise KeyError(f"no printer {message['id']}")
         record = sanitise_printer(existing.id, message.get("patch", {}), existing.persisted())
+        if record["provider"] != existing.provider or record["config"] != existing.config:
+            await INTEGRATIONS[existing.provider].close(existing.config)
         if record["provider"] != existing.provider:
             existing.device_state = None
             for camera in [c for c in self.cameras.values() if c.printer_id == existing.id]:
@@ -506,7 +509,9 @@ class Engine:
         asyncio.ensure_future(self.reconcile_printer_cameras(existing))
 
     async def _cmd_printer_remove(self, message: dict[str, Any]) -> None:
-        self.printers.remove(message["id"])
+        printer = self.printers.remove(message["id"])
+        if printer:
+            await INTEGRATIONS[printer.provider].close(printer.config)
         for camera in [c for c in self.cameras.values() if c.printer_id == message["id"]]:
             await self._drop_camera(camera.id)
         for monitor in self.monitors.values():
