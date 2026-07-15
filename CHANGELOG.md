@@ -7,6 +7,15 @@ release notes.
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.5] - 2026-07-15
+
+### Fixed
+
+- **Centauri Carbon printer status now stays connected instead of flickering offline.**
+  PrintGuard keeps one local connection open for status checks, camera discovery and printer
+  controls, then reconnects only if that session is lost. Connection tests are reliable, and
+  original Centauri Carbon printers can still be reached while paused or in an error state.
+
 ## [2.3.4] - 2026-07-14
 
 ### Added

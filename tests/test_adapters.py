@@ -13,6 +13,7 @@ import pytest
 from printguard.engine import vision
 from printguard.engine.cameras import webrtc_endpoint, whep_endpoint
 from printguard.engine.integrations import INTEGRATIONS, DeviceAction, DeviceStatus
+from printguard.engine.integrations.elegoo import ElegooAdapter
 from printguard.engine.monitors import monitor_watching, sanitise_monitor
 from printguard.engine.notifiers import NOTIFIERS
 from printguard.engine.notifiers.base import multipart_form
@@ -445,6 +446,8 @@ class FakeCentauri:
         self.camera_port = camera_port
         self.actions: list[str] = []
         self.closed = False
+        self._closed = False
+        self.mainboard_id = "mainboard-id"
 
     async def status(self) -> Any:
         return self.state
@@ -460,12 +463,11 @@ class FakeCentauri:
 
     async def close(self) -> None:
         self.closed = True
+        self._closed = True
 
 
-def _fake_centauri(client: FakeCentauri, controls: list[bool] | None = None):
-    async def connect(config: dict[str, Any], *, enable_control: bool = False) -> FakeCentauri:
-        if controls is not None:
-            controls.append(enable_control)
+def _fake_centauri(client: FakeCentauri):
+    async def connect(config: dict[str, Any]) -> FakeCentauri:
         return client
 
     return connect
@@ -490,17 +492,15 @@ async def test_elegoo_centauri_normalises_states(monkeypatch, print_status: int,
     assert state.status is expected
     assert state.progress == 42.0
     assert state.job == "boat.gcode"
-    assert client.closed
+    assert not client.closed
 
 
 async def test_elegoo_centauri_actions_enable_control(monkeypatch) -> None:
     client = FakeCentauri()
-    controls: list[bool] = []
-    monkeypatch.setattr(INTEGRATIONS["elegoo"], "_connect_centauri", _fake_centauri(client, controls))
+    monkeypatch.setattr(INTEGRATIONS["elegoo"], "_connect_centauri", _fake_centauri(client))
     for action in (DeviceAction.PAUSE, DeviceAction.RESUME, DeviceAction.CANCEL):
         await INTEGRATIONS["elegoo"].send(None, ELEGOO_CENTAURI_CONFIG, action)
     assert client.actions == ["pause", "resume", "stop"]
-    assert controls == [True, True, True]
 
 
 @pytest.mark.parametrize(
@@ -513,6 +513,64 @@ async def test_elegoo_centauri_exposes_built_in_camera(monkeypatch, port: int, u
     assert cameras == [
         {"key": "chamber", "name": "Chamber camera", "source": {"kind": "url", "url": url}}
     ]
+
+
+async def test_elegoo_centauri_reuses_one_connection(monkeypatch) -> None:
+    adapter = ElegooAdapter()
+    client = FakeCentauri()
+    connections: list[dict[str, Any]] = []
+
+    async def discover_mainboard_id(host: str) -> str:
+        return "discovered-id"
+
+    async def connect_auto(host: str, **kwargs: Any) -> FakeCentauri:
+        connections.append({"host": host, **kwargs})
+        return client
+
+    monkeypatch.setattr(adapter, "_discover_mainboard_id", discover_mainboard_id)
+    monkeypatch.setattr("pycentauri.connect_auto", connect_auto)
+
+    await adapter.fetch_state(None, ELEGOO_CENTAURI_CONFIG)
+    await adapter.fetch_state(None, ELEGOO_CENTAURI_CONFIG)
+    await adapter.cameras(None, ELEGOO_CENTAURI_CONFIG)
+
+    assert connections == [
+        {
+            "host": "192.168.1.90",
+            "access_code": "Ab3dEf",
+            "enable_control": True,
+            "mainboard_id": "discovered-id",
+        }
+    ]
+    await adapter.close()
+    assert client.closed
+
+
+async def test_elegoo_centauri_reconnects_after_failure(monkeypatch) -> None:
+    adapter = ElegooAdapter()
+
+    class FailingCentauri(FakeCentauri):
+        async def status(self) -> Any:
+            raise RuntimeError("connection lost")
+
+    failed_client = FailingCentauri()
+    clients = [failed_client, FakeCentauri()]
+
+    async def discover_mainboard_id(host: str) -> None:
+        return None
+
+    async def connect_auto(host: str, **kwargs: Any) -> FakeCentauri:
+        return clients.pop(0)
+
+    monkeypatch.setattr(adapter, "_discover_mainboard_id", discover_mainboard_id)
+    monkeypatch.setattr("pycentauri.connect_auto", connect_auto)
+
+    with pytest.raises(RuntimeError, match="connection lost"):
+        await adapter.fetch_state(None, ELEGOO_CENTAURI_CONFIG)
+    assert failed_client.closed
+    state = await adapter.fetch_state(None, ELEGOO_CENTAURI_CONFIG)
+    assert state.status is DeviceStatus.PRINTING
+    await adapter.close()
 
 
 async def test_elegoo_moonraker_reuses_klipper_protocol() -> None:

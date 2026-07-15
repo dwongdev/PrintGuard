@@ -12,6 +12,7 @@ Centauri Python client: https://github.com/bjan/pycentauri
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from .base import DeviceAction, DeviceState, DeviceStatus, HttpFn, IntegrationAdapter
@@ -70,16 +71,20 @@ class ElegooAdapter(IntegrationAdapter):
 
     def __init__(self) -> None:
         self._moonraker = KlipperAdapter()
+        self._connections: dict[tuple[str, str], Any] = {}
+        self._connection_locks: dict[tuple[str, str], asyncio.Lock] = {}
+        self._mainboard_ids: dict[str, str] = {}
 
     async def fetch_state(self, http: HttpFn, config: dict[str, Any]) -> DeviceState:
         """Reads and normalises the active print state."""
         if self._family(config) == _MOONRAKER:
             return await self._moonraker.fetch_state(http, self._moonraker_config(config))
-        printer = await self._connect_centauri(config)
         try:
+            printer = await self._connect_centauri(config)
             status = await printer.status()
-        finally:
-            await printer.close()
+        except Exception:
+            await self.close(config)
+            raise
         return DeviceState(
             self._status(status.print_status),
             float(status.progress or 0.0),
@@ -91,37 +96,81 @@ class ElegooAdapter(IntegrationAdapter):
         if self._family(config) == _MOONRAKER:
             await self._moonraker.send(http, self._moonraker_config(config), action)
             return
-        printer = await self._connect_centauri(config, enable_control=True)
         try:
+            printer = await self._connect_centauri(config)
             await getattr(printer, _ACTIONS[action])()
-        finally:
-            await printer.close()
+        except Exception:
+            await self.close(config)
+            raise
 
     async def cameras(self, http: HttpFn, config: dict[str, Any]) -> list[dict[str, Any]]:
         """Exposes the built-in Centauri camera or Moonraker webcams."""
         if self._family(config) == _MOONRAKER:
             return await self._moonraker.cameras(http, self._moonraker_config(config))
         printer = await self._connect_centauri(config)
-        try:
-            port = printer.camera_port
-        finally:
-            await printer.close()
         return [
             {
                 "key": "chamber",
                 "name": "Chamber camera",
-                "source": {"kind": "url", "url": f"http://{config['host']}:{port}/video"},
+                "source": {"kind": "url", "url": f"http://{config['host']}:{printer.camera_port}/video"},
             }
         ]
 
-    async def _connect_centauri(self, config: dict[str, Any], *, enable_control: bool = False) -> Any:
+    async def close(self, config: dict[str, Any] | None = None) -> None:
+        """Closes persistent Centauri connections."""
+        if config is not None and self._family(config) != _CENTAURI:
+            return
+        keys = (
+            [self._connection_key(config)]
+            if config is not None
+            else list(self._connections.keys() | self._connection_locks.keys())
+        )
+        for key in keys:
+            async with self._connection_locks.setdefault(key, asyncio.Lock()):
+                printer = self._connections.pop(key, None)
+                if printer is None:
+                    continue
+                mainboard_id = printer.mainboard_id
+                if mainboard_id:
+                    self._mainboard_ids[key[0]] = mainboard_id
+                await printer.close()
+        if config is None:
+            self._connection_locks.clear()
+
+    async def _connect_centauri(self, config: dict[str, Any]) -> Any:
         from pycentauri import connect_auto
 
-        return await connect_auto(
-            str(config["host"]),
-            access_code=str(config.get("access_code") or "") or None,
-            enable_control=enable_control,
-        )
+        key = self._connection_key(config)
+        printer = self._connections.get(key)
+        if printer is not None and not printer._closed:
+            return printer
+        async with self._connection_locks.setdefault(key, asyncio.Lock()):
+            printer = self._connections.get(key)
+            if printer is not None and not printer._closed:
+                return printer
+            mainboard_id = self._mainboard_ids.get(key[0]) or await self._discover_mainboard_id(key[0])
+            printer = await connect_auto(
+                key[0],
+                access_code=key[1] or None,
+                enable_control=True,
+                mainboard_id=mainboard_id,
+            )
+            self._connections[key] = printer
+            return printer
+
+    async def _discover_mainboard_id(self, host: str) -> str | None:
+        import socket
+
+        from pycentauri import discover
+
+        resolved = await asyncio.get_running_loop().getaddrinfo(host, None, family=socket.AF_INET)
+        addresses = {entry[4][0] for entry in resolved}
+        addresses.add(host)
+        printers = await discover(timeout=1.0, retries=2)
+        return next((printer.mainboard_id for printer in printers if printer.host in addresses and printer.mainboard_id), None)
+
+    def _connection_key(self, config: dict[str, Any]) -> tuple[str, str]:
+        return str(config["host"]), str(config.get("access_code") or "")
 
     def _family(self, config: dict[str, Any]) -> str:
         family = str(config["family"])

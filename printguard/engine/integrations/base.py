@@ -99,3 +99,6 @@ class IntegrationAdapter(Adapter):
             picked up automatically.
         """
         return []
+
+    async def close(self, config: dict[str, Any] | None = None) -> None:
+        """Releases persistent connections for one configuration or all configurations."""
