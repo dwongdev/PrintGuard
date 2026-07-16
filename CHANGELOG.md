@@ -16,6 +16,8 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   resumes it automatically when printing or viewing starts. RTSP, RTMP and WHEP feeds are pulled
   on demand, while MJPEG, Bambu and device cameras keep their existing browser-compatible H.264
   bridge without running it unnecessarily. Unknown or unreachable printers remain monitored.
+- **Desktop webcams now preview immediately after registration.** The camera stays live while its
+  preview connects, then still enters standby after viewing or monitoring stops.
 
 ## [2.3.5] - 2026-07-15
 
