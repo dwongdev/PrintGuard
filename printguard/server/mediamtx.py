@@ -58,7 +58,12 @@ class MediaMTX:
         A fingerprint is the SHA-256 of a self-signed source certificate (hex,
         no colons), letting MediaMTX validate an otherwise-untrusted RTSPS feed.
         """
-        payload: dict[str, Any] = {"source": source_url, "sourceOnDemand": False}
+        payload: dict[str, Any] = {
+            "source": source_url,
+            "sourceOnDemand": True,
+            "sourceOnDemandStartTimeout": "30s",
+            "sourceOnDemandCloseAfter": "10s",
+        }
         if fingerprint:
             payload["sourceFingerprint"] = fingerprint
         resp = await self._client.post(f"{self._api}/v3/config/paths/add/{name}", json=payload, timeout=5.0)

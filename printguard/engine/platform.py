@@ -33,9 +33,14 @@ class FrameSource(Protocol):
 
     fps: float
     online: bool
+    standby: bool
 
     async def grab(self) -> Frame | None:
         """Returns the freshest available frame, or None if not ready."""
+        ...
+
+    def set_monitoring(self, active: bool) -> None:
+        """Starts or stops capture needed by inference."""
         ...
 
     def close(self) -> None:

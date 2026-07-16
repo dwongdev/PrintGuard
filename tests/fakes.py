@@ -18,12 +18,17 @@ class FakeSource:
     def __init__(self, fps: float) -> None:
         self.fps = fps
         self.online = True
+        self.standby = False
         self._born = time.monotonic()
 
     async def grab(self) -> Frame | None:
         seq = int((time.monotonic() - self._born) * self.fps)
         rgb = np.full((48, 64, 3), seq % 255, dtype=np.uint8)
         return Frame(rgb=rgb, seq=float(seq), ts=time.time())
+
+    def set_monitoring(self, active: bool) -> None:
+        self.standby = not active
+        self.online = active
 
     def close(self) -> None:
         self.online = False

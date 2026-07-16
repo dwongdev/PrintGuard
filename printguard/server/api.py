@@ -160,6 +160,7 @@ class CameraOut(_ReadModel):
     inferring: bool | None = None
     in_use: bool | None = None
     online: bool | None = None
+    standby: bool | None = None
     last_result: LastResult | None = None
     brightness: float | None = None
     contrast: float | None = None

@@ -311,6 +311,7 @@ class Engine:
             logger.debug("camera '%s' (%s) failed to attach: %s", camera.name, camera.id, exc)
             return
         camera.frame_source = source
+        source.set_monitoring(camera.in_use)
         if source.fps > 0:
             camera.max_fps = source.fps
         logger.info("camera '%s' (%s) attached at %.1f fps", camera.name, camera.id, source.fps)
@@ -397,6 +398,7 @@ class Engine:
         )
         source = await self.platform.open_camera(camera_id, camera.source)
         camera.frame_source = source
+        source.set_monitoring(camera.in_use)
         if source.fps > 0:
             camera.max_fps = source.fps
         self.cameras.add(camera)
@@ -478,6 +480,7 @@ class Engine:
                 logger.warning("printer camera '%s' failed to open: %s", descriptor["name"], exc)
                 continue
             camera.frame_source = source
+            source.set_monitoring(camera.in_use)
             if source.fps > 0:
                 camera.max_fps = source.fps
             self.cameras.add(camera)

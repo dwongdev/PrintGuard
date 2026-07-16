@@ -119,11 +119,14 @@ async def test_standby_gating() -> None:
         await asyncio.sleep(1.0)
         assert not engine.state_event()["monitors"][0]["watching"], "idle printer should be in standby"
         assert not engine.cameras.schedulable(), "standby monitor's camera should not be scheduled"
+        camera = engine.cameras.values()[0]
+        assert camera.standby and not camera.online, "standby camera capture should sleep"
         results_during_standby = len([e for e in events if e.get("event") == "result"])
 
         platform.device_status = "Printing"
         await asyncio.sleep(1.0)
         assert engine.state_event()["monitors"][0]["watching"], "printing printer should be watched"
+        assert not camera.standby and camera.online, "printing should wake camera capture"
         resumed = len([e for e in events if e.get("event") == "result"]) - results_during_standby
     assert resumed > 0, "inference did not resume when printing started"
 

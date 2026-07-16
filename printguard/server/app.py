@@ -175,6 +175,7 @@ def create_app() -> FastAPI:
         dashboard polls playlists every second, so letting the error escape
         would flood the log with one ASGI traceback per poll.
         """
+        await platform.view_camera(path.split("/", 1)[0])
         client: httpx.AsyncClient = app.state.hls
         try:
             upstream = await client.send(

@@ -35,12 +35,20 @@ class BrowserSource:
         """Whether the underlying media track is still live."""
         return bool(self._bridge.isLive(self._camera_id))
 
+    @property
+    def standby(self) -> bool:
+        """Browser cameras remain live for their local preview."""
+        return False
+
     async def grab(self) -> Frame | None:
         """Draws the current video frame and converts it to RGB."""
         image_data = self._bridge.grab(self._camera_id)
         if image_data is None:
             return None
         return Frame(rgb=_imagedata_to_rgb(image_data), seq=float(image_data.seq), ts=time.time())
+
+    def set_monitoring(self, active: bool) -> None:
+        """Local previews keep their browser camera open while inference is idle."""
 
     def close(self) -> None:
         """Stops the media track."""

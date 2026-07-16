@@ -35,6 +35,7 @@ MEASURE_WARMUP_S = 1.0
 OPEN_WAIT_S = 25.0
 CAMERA_CONSENT_WAIT_S = 60.0
 RECONNECT_DELAY_S = 3.0
+VIEWER_IDLE_S = 10.0
 MJPEG_LIVE_OPTIONS = {"analyzeduration": "0", "probesize": "32"}
 DEVICE_OPEN_OPTIONS = ({"framerate": "30"}, {"framerate": "15"}, {})
 """Frame rates tried, most common first, when a device's own capture formats
@@ -237,8 +238,33 @@ class AVSource:
         self._latest: Frame | None = None
         self._seq = 0
         self._stop = False
+        self._monitoring = True
+        self._viewer_until = 0.0
+        self._wake = threading.Event()
+        self._wake.set()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    @property
+    def standby(self) -> bool:
+        """Whether capture is sleeping until inference or a viewer needs it."""
+        return not self._demanded()
+
+    def _demanded(self) -> bool:
+        return self._monitoring or time.monotonic() < self._viewer_until
+
+    def set_monitoring(self, active: bool) -> None:
+        """Keeps capture running while inference needs frames."""
+        self._monitoring = active
+        self._wake.set()
+
+    def view(self) -> bool:
+        """Keeps direct-source publishing alive for a recent HLS viewer."""
+        if self._publish_url is None:
+            return False
+        self._viewer_until = time.monotonic() + VIEWER_IDLE_S
+        self._wake.set()
+        return True
 
     def _open(self) -> tuple[Any, Any]:
         """Opens the container, returning it and any pipe to close afterwards.
@@ -267,6 +293,11 @@ class AVSource:
 
     def _run(self) -> None:
         while not self._stop:
+            if not self._demanded():
+                self.online = False
+                self._wake.wait()
+                self._wake.clear()
+                continue
             container: Any = None
             push: H264Push | None = None
             pipe: Any = None
@@ -291,7 +322,7 @@ class AVSource:
                 if pipe is not None:
                     pipe.close()
             self.online = False
-            if not self._stop:
+            if not self._stop and self._demanded():
                 time.sleep(RECONNECT_DELAY_S)
 
     def _decode(self, container: Any, stream: Any, push: H264Push | None) -> None:
@@ -307,7 +338,7 @@ class AVSource:
         while not self._stop:
             try:
                 for frame in container.decode(stream):
-                    if self._stop:
+                    if self._stop or not self._demanded():
                         return
                     self._seq += 1
                     self._latest = Frame(rgb=frame.to_ndarray(format="rgb24"), seq=float(self._seq), ts=time.time())
@@ -330,6 +361,7 @@ class AVSource:
         """Stops the reader thread."""
         self._stop = True
         self.online = False
+        self._wake.set()
 
 
 class ServerPlatform:
@@ -354,6 +386,7 @@ class ServerPlatform:
         data_dir.mkdir(parents=True, exist_ok=True)
         self._client = httpx.AsyncClient(follow_redirects=True)
         self.mediamtx = MediaMTX(mediamtx_api, mediamtx_rtsp, self._client)
+        self._sources: dict[str, AVSource] = {}
 
     async def close(self) -> None:
         """Releases the HTTP client and inference workers."""
@@ -431,6 +464,7 @@ class ServerPlatform:
         else:
             raise ValueError(f"hub mode cannot open source kind {source['kind']!r}")
         av_source = AVSource(target, publish_url, container_format, open_options)
+        self._sources[camera_id] = av_source
         deadline = time.monotonic() + OPEN_WAIT_S
         while time.monotonic() < deadline and not (av_source.online and av_source.fps > 0):
             await asyncio.sleep(0.2)
@@ -441,8 +475,18 @@ class ServerPlatform:
             raise RuntimeError(f"no frames from camera {camera_id}{detail}")
         return av_source
 
+    async def view_camera(self, camera_id: str) -> None:
+        """Wakes a direct camera source for an HLS request."""
+        source = self._sources.get(camera_id)
+        if not source or not source.view():
+            return
+        deadline = time.monotonic() + OPEN_WAIT_S
+        while time.monotonic() < deadline and not source.online:
+            await asyncio.sleep(0.1)
+
     async def release_camera(self, camera_id: str, source: dict[str, Any]) -> None:
         """Removes the MediaMTX path created for a URL-backed camera."""
+        self._sources.pop(camera_id, None)
         if source["kind"] == "url" and pull_source(source["url"]) is not None:
             try:
                 await self.mediamtx.remove_path(camera_id)

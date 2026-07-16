@@ -54,7 +54,7 @@ function CameraRow({ camera, focus }: { camera: Camera; focus: boolean }) {
   return (
     <div ref={ref} className="panel overflow-hidden">
       <div className="flex items-center gap-3 px-3 py-2">
-        <span className={`led ${camera.online ? "led-on" : "led-off"}`} />
+        <span className={`led ${camera.online ? "led-on" : "led-off"}`} title={camera.online ? "online" : camera.standby ? "standby" : "offline"} />
         <div className="flex-1 min-w-0 leading-tight">
           <div className="text-sm font-medium truncate">{camera.name}</div>
           <div className="mono text-[0.62rem] text-text-2 truncate">{sourceLabel(camera.source)}</div>

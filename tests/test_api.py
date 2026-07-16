@@ -224,6 +224,29 @@ def test_callable_mjpeg_sources_cap_pyav_probe(monkeypatch) -> None:
     }, "live MJPEG pipes cap PyAV probing so av.open returns instead of draining frames"
 
 
+def test_direct_camera_source_wakes_for_viewers(monkeypatch) -> None:
+    from printguard.server import platform
+
+    monkeypatch.setattr(platform.threading.Thread, "start", lambda self: None)
+    source = platform.AVSource("http://camera/stream", "rtsp://mediamtx/camera")
+    source.set_monitoring(False)
+    assert source.standby
+    source.view()
+    assert not source.standby
+    source.close()
+
+
+def test_pullable_camera_source_leaves_viewing_to_mediamtx(monkeypatch) -> None:
+    from printguard.server import platform
+
+    monkeypatch.setattr(platform.threading.Thread, "start", lambda self: None)
+    source = platform.AVSource("rtsp://mediamtx/camera")
+    source.set_monitoring(False)
+    source.view()
+    assert source.standby
+    source.close()
+
+
 async def test_unknown_ids_and_events() -> None:
     async with api() as (client, _engine, _platform, _monitor_id, _printer_id, _camera_id, _tokens):
         assert (await client.get("/printers/nope")).status_code == 404

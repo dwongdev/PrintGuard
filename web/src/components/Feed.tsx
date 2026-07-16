@@ -47,7 +47,7 @@ export function Feed({ camera, mode }: { camera: Camera | undefined; mode: strin
       {(!camera || !online) && (
         <div className="absolute inset-0 grid place-items-center bg-ink-0/85 z-[2]">
           <span className="mono text-[0.65rem] tracking-[0.2em] text-text-2 uppercase">
-            {camera ? "no signal" : "no camera bound"}
+            {camera ? (camera.standby ? "starting stream" : "no signal") : "no camera bound"}
           </span>
         </div>
       )}

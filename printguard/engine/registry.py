@@ -96,6 +96,11 @@ class Camera:
         """Whether the camera's frame source is attached and healthy."""
         return self.frame_source is not None and self.frame_source.online
 
+    @property
+    def standby(self) -> bool:
+        """Whether capture is intentionally sleeping until it is needed."""
+        return self.frame_source is not None and self.frame_source.standby
+
     def mark_inferred(self, result: dict[str, Any]) -> None:
         """Records a completed inference and updates the achieved rate."""
         now = time.monotonic()
@@ -118,6 +123,7 @@ class Camera:
             "inferring": self.inferring,
             "in_use": self.in_use,
             "online": self.online,
+            "standby": self.standby,
             "last_result": self.last_result,
             "brightness": round(self.brightness, 2),
             "contrast": round(self.contrast, 2),
@@ -240,6 +246,8 @@ class CameraRegistry(Registry[Camera]):
         bound = {m["camera_id"] for m in monitors.values() if monitor_watching(m, printers)}
         for camera in self.values():
             camera.in_use = camera.id in bound
+            if camera.frame_source:
+                camera.frame_source.set_monitoring(camera.in_use)
 
 
 class PrinterRegistry(Registry[Printer]):
