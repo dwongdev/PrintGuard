@@ -2,9 +2,17 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
+
 import httpx
 
-from printguard.server.app import ASSET_CACHE_CONTROL, REVALIDATE_CACHE_CONTROL, WebStaticFiles
+from printguard.server.app import ASSET_CACHE_CONTROL, REVALIDATE_CACHE_CONTROL, WebStaticFiles, create_app
+
+
+class AsyncContent(httpx.AsyncByteStream):
+    async def __aiter__(self):
+        yield b"#EXTM3U"
 
 
 async def test_web_static_files_revalidate_html_and_cache_hashed_assets(tmp_path) -> None:
@@ -22,3 +30,22 @@ async def test_web_static_files_revalidate_html_and_cache_hashed_assets(tmp_path
     assert asset.headers["cache-control"] == ASSET_CACHE_CONTROL
     assert unchanged.status_code == 304 and unchanged.headers["cache-control"] == REVALIDATE_CACHE_CONTROL
     assert "etag" in html.headers and "etag" in asset.headers
+
+
+async def test_hls_view_wakes_camera_before_proxying() -> None:
+    platform = SimpleNamespace(view_camera=AsyncMock())
+    app = create_app()
+    app.state.engine = SimpleNamespace(platform=platform)
+    app.state.hls = httpx.AsyncClient(
+        base_url="http://mediamtx",
+        transport=httpx.MockTransport(lambda request: httpx.Response(200, stream=AsyncContent(), request=request)),
+    )
+
+    try:
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/hls/camera-one/index.m3u8")
+    finally:
+        await app.state.hls.aclose()
+
+    assert response.content == b"#EXTM3U"
+    platform.view_camera.assert_awaited_once_with("camera-one")
