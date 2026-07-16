@@ -7,6 +7,16 @@ release notes.
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.6] - 2026-07-16
+
+### Fixed
+
+- **Idle cameras no longer keep decoding and converting every frame.** When a printer is
+  positively idle and nobody is viewing its feed, PrintGuard puts the camera in standby and
+  resumes it automatically when printing or viewing starts. RTSP, RTMP and WHEP feeds are pulled
+  on demand, while MJPEG, Bambu and device cameras keep their existing browser-compatible H.264
+  bridge without running it unnecessarily. Unknown or unreachable printers remain monitored.
+
 ## [2.3.5] - 2026-07-15
 
 ### Fixed

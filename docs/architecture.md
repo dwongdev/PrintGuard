@@ -138,7 +138,13 @@ allocation is fully dynamic:
    dispatch time. Frames carry a sequence identity, so the same frame is never inferred
    twice and results always describe the present, not a backlog.
 
-MediaMTX bursts the buffered GOP on RTSP connect, so stream fps istrusted from the SDP `average_rate`, else measured only after a warm-up.
+MediaMTX bursts the buffered GOP on RTSP connect, so stream fps is trusted from the SDP
+`average_rate`, else measured only after a warm-up.
+
+Hub camera capture is demand-driven. A source stays active while an enabled monitor is watching
+or while an HLS viewer is requesting it. MediaMTX pulls RTSP, RTMP and WHEP sources on demand;
+PrintGuard wakes its own MJPEG, Bambu and device-camera publisher for viewers. A positively idle
+printer lets the source sleep, while an unknown or unreachable printer keeps it active.
 
 ## The defect pipeline
 
