@@ -35,7 +35,7 @@ MEASURE_WARMUP_S = 1.0
 OPEN_WAIT_S = 25.0
 CAMERA_CONSENT_WAIT_S = 60.0
 RECONNECT_DELAY_S = 3.0
-VIEWER_IDLE_S = 10.0
+DEMAND_IDLE_S = 10.0
 MJPEG_LIVE_OPTIONS = {"analyzeduration": "0", "probesize": "32"}
 DEVICE_OPEN_OPTIONS = ({"framerate": "30"}, {"framerate": "15"}, {})
 """Frame rates tried, most common first, when a device's own capture formats
@@ -240,7 +240,7 @@ class AVSource:
         self._seq = 0
         self._stop = False
         self._monitoring = True
-        self._viewer_until = 0.0
+        self._demand_until = 0.0
         self._wake = threading.Event()
         self._wake.set()
         self._thread = threading.Thread(target=self._run, daemon=True)
@@ -252,10 +252,12 @@ class AVSource:
         return not self._demanded()
 
     def _demanded(self) -> bool:
-        return self._monitoring or time.monotonic() < self._viewer_until
+        return self._monitoring or time.monotonic() < self._demand_until
 
     def set_monitoring(self, active: bool) -> None:
         """Keeps capture running while inference needs frames."""
+        if self._monitoring and not active:
+            self._demand_until = max(self._demand_until, time.monotonic() + DEMAND_IDLE_S)
         self._monitoring = active
         self._wake.set()
 
@@ -263,7 +265,7 @@ class AVSource:
         """Keeps direct-source publishing alive for a recent HLS viewer."""
         if self._publish_url is None:
             return False
-        self._viewer_until = time.monotonic() + VIEWER_IDLE_S
+        self._demand_until = time.monotonic() + DEMAND_IDLE_S
         self._wake.set()
         return True
 
@@ -494,6 +496,7 @@ class ServerPlatform:
         deadline = time.monotonic() + OPEN_WAIT_S
         while time.monotonic() < deadline and not source.online:
             await asyncio.sleep(0.1)
+        source.view()
 
     async def release_camera(self, camera_id: str, source: dict[str, Any]) -> None:
         """Removes the MediaMTX path created for a URL-backed camera."""

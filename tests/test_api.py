@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import httpx
 import numpy as np
@@ -229,8 +231,12 @@ def test_direct_camera_source_wakes_for_viewers(monkeypatch) -> None:
     from printguard.server import platform
 
     monkeypatch.setattr(platform.AVSource, "_run", lambda self: None)
+    now = [100.0]
+    monkeypatch.setattr(platform.time, "monotonic", lambda: now[0])
     source = platform.AVSource("http://camera/stream", "rtsp://mediamtx/camera")
     source.set_monitoring(False)
+    assert not source.standby
+    now[0] += platform.DEMAND_IDLE_S
     assert source.standby
     source.view()
     assert not source.standby
@@ -241,11 +247,26 @@ def test_pullable_camera_source_leaves_viewing_to_mediamtx(monkeypatch) -> None:
     from printguard.server import platform
 
     monkeypatch.setattr(platform.AVSource, "_run", lambda self: None)
+    now = [100.0]
+    monkeypatch.setattr(platform.time, "monotonic", lambda: now[0])
     source = platform.AVSource("rtsp://mediamtx/camera")
     source.set_monitoring(False)
+    now[0] += platform.DEMAND_IDLE_S
     source.view()
     assert source.standby
     source.close()
+
+
+async def test_view_camera_renews_demand_after_cold_start() -> None:
+    from printguard.server import platform
+
+    source = SimpleNamespace(online=True, view=Mock(return_value=True))
+    server = object.__new__(platform.ServerPlatform)
+    server._sources = {"camera": source}
+
+    await server.view_camera("camera")
+
+    assert source.view.call_count == 2
 
 
 async def test_camera_source_converts_only_grabbed_frames(monkeypatch) -> None:
