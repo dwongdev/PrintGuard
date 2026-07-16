@@ -52,6 +52,7 @@ class FakePlatform:
         self.http_calls: list[tuple[str, str]] = []
         self.http_requests: list[dict[str, Any]] = []
         self.releases: list[dict[str, Any]] = []
+        self.released_cameras: list[str] = []
         self.state: dict[str, Any] = {}
 
     async def infer(self, rgb: np.ndarray) -> dict[str, Any]:
@@ -66,7 +67,7 @@ class FakePlatform:
         return FakeSource(float(source.get("fps", 15.0)))
 
     async def release_camera(self, camera_id: str, source: dict[str, Any]) -> None:
-        pass
+        self.released_cameras.append(camera_id)
 
     async def http(self, method: str, url: str, **kwargs: Any) -> tuple[int, Any]:
         self.http_calls.append((method, url))

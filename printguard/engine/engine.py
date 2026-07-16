@@ -58,6 +58,7 @@ class Engine:
         self._sinks: list[Callable[[dict[str, Any]], None]] = []
         self._recent: deque[dict[str, Any]] = deque(maxlen=RECENT_EVENTS_MAX)
         self._tasks: list[asyncio.Task] = []
+        self._attach_tasks: dict[str, asyncio.Task[None]] = {}
         self._handlers: dict[str, Any] = {
             "discover": self._cmd_discover,
             "camera.add": self._cmd_camera_add,
@@ -111,7 +112,7 @@ class Engine:
                 rotation=settings["rotation"],
             )
             self.cameras.add(camera)
-            asyncio.ensure_future(self._attach(camera))
+            self._schedule_attach(camera)
         self.cameras.sync_in_use(self.monitors, self.printers)
         self._tasks = [
             asyncio.ensure_future(self.scheduler.run()),
@@ -135,7 +136,7 @@ class Engine:
         for task in self._tasks:
             task.cancel()
         for camera_id in list(self.cameras.items):
-            self.cameras.remove(camera_id)
+            await self._drop_camera(camera_id)
         await asyncio.gather(*(adapter.close() for adapter in INTEGRATIONS.values()))
         logger.info("engine stopped")
 
@@ -310,11 +311,27 @@ class Engine:
         except Exception as exc:
             logger.debug("camera '%s' (%s) failed to attach: %s", camera.name, camera.id, exc)
             return
+        if self.cameras.get(camera.id) is not camera:
+            source.close()
+            await self.platform.release_camera(camera.id, camera.source)
+            return
         camera.frame_source = source
         source.set_monitoring(camera.in_use)
         if source.fps > 0:
             camera.max_fps = source.fps
         logger.info("camera '%s' (%s) attached at %.1f fps", camera.name, camera.id, source.fps)
+
+    def _schedule_attach(self, camera: Camera) -> None:
+        if camera.id in self._attach_tasks:
+            return
+        task = asyncio.create_task(self._attach(camera))
+        self._attach_tasks[camera.id] = task
+
+        def forget(done: asyncio.Task[None]) -> None:
+            if self._attach_tasks.get(camera.id) is done:
+                self._attach_tasks.pop(camera.id)
+
+        task.add_done_callback(forget)
 
     async def _ticker(self) -> None:
         tick = 0
@@ -324,7 +341,7 @@ class Engine:
             for camera in self.cameras.values():
                 if camera.frame_source is None:
                     if tick % REATTACH_EVERY_TICKS == 0:
-                        asyncio.ensure_future(self._attach(camera))
+                        self._schedule_attach(camera)
                 elif camera.frame_source.fps > 0:
                     camera.max_fps = camera.frame_source.fps
             self.emit(self.state_event())
@@ -434,6 +451,10 @@ class Engine:
 
     async def _drop_camera(self, camera_id: str) -> None:
         camera = self.cameras.remove(camera_id)
+        task = self._attach_tasks.pop(camera_id, None)
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
         if camera:
             await self.platform.release_camera(camera.id, camera.source)
         for monitor in self.monitors.values():

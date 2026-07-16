@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -267,6 +268,25 @@ async def test_view_camera_renews_demand_after_cold_start() -> None:
     await server.view_camera("camera")
 
     assert source.view.call_count == 2
+
+
+async def test_cancelled_camera_open_closes_platform_source(monkeypatch) -> None:
+    from printguard.server import platform
+
+    source = SimpleNamespace(online=False, fps=0.0, last_error=None, close=Mock())
+    monkeypatch.setattr(platform, "AVSource", lambda *args: source)
+    server = object.__new__(platform.ServerPlatform)
+    server.mediamtx = SimpleNamespace(rtsp_url=Mock(return_value="rtsp://mediamtx/camera"))
+    server._sources = {}
+    task = asyncio.create_task(server.open_camera("camera", {"kind": "url", "url": "http://camera/stream"}))
+    await asyncio.sleep(0)
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    source.close.assert_called_once()
+    assert server._sources == {}
 
 
 async def test_camera_source_converts_only_grabbed_frames(monkeypatch) -> None:

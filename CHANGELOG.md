@@ -17,7 +17,8 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   on demand, while MJPEG, Bambu and device cameras keep their existing browser-compatible H.264
   bridge without running it unnecessarily. Unknown or unreachable printers remain monitored.
 - **Desktop webcams now preview immediately after registration.** The camera stays live while its
-  preview connects, then still enters standby after viewing or monitoring stops.
+  preview connects, then still enters standby after viewing or monitoring stops. Slow desktop
+  camera startup no longer leaves orphaned captures running after the window closes.
 
 ## [2.3.5] - 2026-07-15
 

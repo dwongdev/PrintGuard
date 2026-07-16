@@ -478,11 +478,17 @@ class ServerPlatform:
             raise ValueError(f"hub mode cannot open source kind {source['kind']!r}")
         av_source = AVSource(target, publish_url, container_format, open_options)
         self._sources[camera_id] = av_source
-        deadline = time.monotonic() + OPEN_WAIT_S
-        while time.monotonic() < deadline and not (av_source.online and av_source.fps > 0):
-            await asyncio.sleep(0.2)
+        try:
+            deadline = time.monotonic() + OPEN_WAIT_S
+            while time.monotonic() < deadline and not (av_source.online and av_source.fps > 0):
+                await asyncio.sleep(0.2)
+        except asyncio.CancelledError:
+            if self._sources.get(camera_id) is av_source:
+                await self.release_camera(camera_id, source)
+            else:
+                av_source.close()
+            raise
         if not av_source.online:
-            av_source.close()
             await self.release_camera(camera_id, source)
             detail = f": {av_source.last_error}" if av_source.last_error else ""
             raise RuntimeError(f"no frames from camera {camera_id}{detail}")
@@ -499,8 +505,10 @@ class ServerPlatform:
         source.view()
 
     async def release_camera(self, camera_id: str, source: dict[str, Any]) -> None:
-        """Removes the MediaMTX path created for a URL-backed camera."""
-        self._sources.pop(camera_id, None)
+        """Closes the source and removes any MediaMTX pull path."""
+        av_source = self._sources.pop(camera_id, None)
+        if av_source:
+            av_source.close()
         if source["kind"] == "url" and pull_source(source["url"]) is not None:
             try:
                 await self.mediamtx.remove_path(camera_id)

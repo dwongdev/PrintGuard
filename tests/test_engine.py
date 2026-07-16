@@ -131,6 +131,65 @@ async def test_standby_gating() -> None:
     assert resumed > 0, "inference did not resume when printing started"
 
 
+async def test_restored_camera_attachment_is_single_flight(monkeypatch) -> None:
+    from fakes import FakeSource
+    from printguard.engine import engine as engine_module
+    from printguard.engine.registry import Camera
+
+    platform = FakePlatform()
+    platform.state = {
+        "cameras": [Camera(id="slow", name="Slow", source={"kind": "fake", "fps": 30.0}, max_fps=30.0).persisted()]
+    }
+    release = asyncio.Event()
+    attempts = 0
+
+    async def open_camera(camera_id, source):
+        nonlocal attempts
+        attempts += 1
+        await release.wait()
+        return FakeSource(30.0)
+
+    monkeypatch.setattr(platform, "open_camera", open_camera)
+    monkeypatch.setattr(engine_module, "STATE_TICK_S", 0.01)
+    monkeypatch.setattr(engine_module, "REATTACH_EVERY_TICKS", 1)
+    engine = Engine(platform)
+    await engine.start()
+    try:
+        await asyncio.sleep(0.05)
+        assert attempts == 1
+        release.set()
+        await asyncio.sleep(0.02)
+        assert engine.cameras.get("slow").frame_source is not None
+    finally:
+        await engine.stop()
+
+
+async def test_removing_camera_cancels_pending_attachment(monkeypatch) -> None:
+    from printguard.engine.registry import Camera
+
+    platform = FakePlatform()
+    platform.state = {
+        "cameras": [Camera(id="slow", name="Slow", source={"kind": "fake", "fps": 30.0}, max_fps=30.0).persisted()]
+    }
+    started = asyncio.Event()
+
+    async def open_camera(camera_id, source):
+        started.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(platform, "open_camera", open_camera)
+    engine = Engine(platform)
+    await engine.start()
+    await started.wait()
+
+    await engine._drop_camera("slow")
+
+    assert engine.cameras.get("slow") is None
+    assert "slow" not in engine._attach_tasks
+    assert platform.released_cameras == ["slow"]
+    await engine.stop()
+
+
 async def test_watchdog_and_failed_action() -> None:
     watchdog.DEVICE_POLL_S = 0.1
     watchdog.WATCH_TICK_S = 0.05
