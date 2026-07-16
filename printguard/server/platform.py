@@ -235,7 +235,8 @@ class AVSource:
         self.fps = 0.0
         self.online = False
         self.last_error: str | None = None
-        self._latest: Frame | None = None
+        self._latest: tuple[av.VideoFrame, float, float] | None = None
+        self._latest_rgb: Frame | None = None
         self._seq = 0
         self._stop = False
         self._monitoring = True
@@ -341,7 +342,7 @@ class AVSource:
                     if self._stop or not self._demanded():
                         return
                     self._seq += 1
-                    self._latest = Frame(rgb=frame.to_ndarray(format="rgb24"), seq=float(self._seq), ts=time.time())
+                    self._latest = (frame, float(self._seq), time.time())
                     self.online = True
                     if push is not None:
                         push.send(frame)
@@ -354,8 +355,18 @@ class AVSource:
                 time.sleep(0.02)
 
     async def grab(self) -> Frame | None:
-        """Returns the freshest decoded frame without copying."""
-        return self._latest
+        """Converts and returns the freshest decoded frame."""
+        latest = self._latest
+        if latest is None:
+            return None
+        frame, seq, ts = latest
+        if self._latest_rgb is not None and self._latest_rgb.seq == seq:
+            return self._latest_rgb
+        rgb = await asyncio.to_thread(frame.to_ndarray, format="rgb24")
+        result = Frame(rgb=rgb, seq=seq, ts=ts)
+        if self._latest is latest:
+            self._latest_rgb = result
+        return result
 
     def close(self) -> None:
         """Stops the reader thread."""

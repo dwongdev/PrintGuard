@@ -247,6 +247,31 @@ def test_pullable_camera_source_leaves_viewing_to_mediamtx(monkeypatch) -> None:
     source.close()
 
 
+async def test_camera_source_converts_only_grabbed_frames(monkeypatch) -> None:
+    from printguard.server import platform
+
+    monkeypatch.setattr(platform.threading.Thread, "start", lambda self: None)
+
+    class VideoFrame:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def to_ndarray(self, *, format: str):
+            self.calls += 1
+            return np.zeros((48, 64, 3), dtype=np.uint8)
+
+    frame = VideoFrame()
+    source = platform.AVSource("rtsp://mediamtx/camera")
+    source._latest = (frame, 1.0, 2.0)
+    first = await source.grab()
+    second = await source.grab()
+    source.close()
+
+    assert first is second
+    assert first is not None and first.seq == 1.0 and first.ts == 2.0
+    assert frame.calls == 1
+
+
 async def test_unknown_ids_and_events() -> None:
     async with api() as (client, _engine, _platform, _monitor_id, _printer_id, _camera_id, _tokens):
         assert (await client.get("/printers/nope")).status_code == 404
