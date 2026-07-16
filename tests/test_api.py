@@ -5,6 +5,7 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 
 import httpx
+import numpy as np
 import pytest
 
 from fakes import FakePlatform
@@ -227,7 +228,7 @@ def test_callable_mjpeg_sources_cap_pyav_probe(monkeypatch) -> None:
 def test_direct_camera_source_wakes_for_viewers(monkeypatch) -> None:
     from printguard.server import platform
 
-    monkeypatch.setattr(platform.threading.Thread, "start", lambda self: None)
+    monkeypatch.setattr(platform.AVSource, "_run", lambda self: None)
     source = platform.AVSource("http://camera/stream", "rtsp://mediamtx/camera")
     source.set_monitoring(False)
     assert source.standby
@@ -239,7 +240,7 @@ def test_direct_camera_source_wakes_for_viewers(monkeypatch) -> None:
 def test_pullable_camera_source_leaves_viewing_to_mediamtx(monkeypatch) -> None:
     from printguard.server import platform
 
-    monkeypatch.setattr(platform.threading.Thread, "start", lambda self: None)
+    monkeypatch.setattr(platform.AVSource, "_run", lambda self: None)
     source = platform.AVSource("rtsp://mediamtx/camera")
     source.set_monitoring(False)
     source.view()
@@ -250,7 +251,7 @@ def test_pullable_camera_source_leaves_viewing_to_mediamtx(monkeypatch) -> None:
 async def test_camera_source_converts_only_grabbed_frames(monkeypatch) -> None:
     from printguard.server import platform
 
-    monkeypatch.setattr(platform.threading.Thread, "start", lambda self: None)
+    monkeypatch.setattr(platform.AVSource, "_run", lambda self: None)
 
     class VideoFrame:
         def __init__(self) -> None:
