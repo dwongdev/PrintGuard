@@ -19,6 +19,9 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 - **Desktop webcams now preview immediately after registration.** The camera stays live while its
   preview connects, then still enters standby after viewing or monitoring stops. Slow desktop
   camera startup no longer leaves orphaned captures running after the window closes.
+- **Camera and monitor status lights no longer flicker between healthy colours.** Camera indicators
+  now show stable availability, while monitor indicators stay green when watching and switch red
+  only for a genuine defect alert.
 
 ## [2.3.5] - 2026-07-15
 
