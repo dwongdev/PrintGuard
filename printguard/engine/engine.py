@@ -57,7 +57,7 @@ class Engine:
         self.watchdog = Watchdog(self)
         self._sinks: list[Callable[[dict[str, Any]], None]] = []
         self._recent: deque[dict[str, Any]] = deque(maxlen=RECENT_EVENTS_MAX)
-        self._tasks: list[asyncio.Task] = []
+        self._tasks: list[asyncio.Task[None]] = []
         self._attach_tasks: dict[str, asyncio.Task[None]] = {}
         self._handlers: dict[str, Any] = {
             "discover": self._cmd_discover,
@@ -135,6 +135,8 @@ class Engine:
         """Cancels background loops and closes every frame source."""
         for task in self._tasks:
             task.cancel()
+        await asyncio.gather(*self._tasks, return_exceptions=True)
+        await self.watchdog.close()
         for camera_id in list(self.cameras.items):
             await self._drop_camera(camera_id)
         await asyncio.gather(*(adapter.close() for adapter in INTEGRATIONS.values()))

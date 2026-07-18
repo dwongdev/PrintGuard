@@ -27,6 +27,9 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
   of retrying the same broken session until the camera is toggled manually.
 - **Alert-only notifications now state that no printer action is configured.** This makes clear that
   detection and push alerts are still active when a printer is powered off or unreachable.
+- **Printer actions and notifications no longer pause camera inference.** Slow or unreachable
+  services are handled independently while monitoring continues, and genuinely stalled camera
+  sources are replaced automatically after a fresh-frame timeout.
 
 ## [2.3.5] - 2026-07-15
 

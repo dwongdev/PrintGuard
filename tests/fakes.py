@@ -19,10 +19,11 @@ class FakeSource:
         self.fps = fps
         self.online = True
         self.standby = False
+        self.frozen = False
         self._born = time.monotonic()
 
     async def grab(self) -> Frame | None:
-        seq = int((time.monotonic() - self._born) * self.fps)
+        seq = 0 if self.frozen else int((time.monotonic() - self._born) * self.fps)
         rgb = np.full((48, 64, 3), seq % 255, dtype=np.uint8)
         return Frame(rgb=rgb, seq=float(seq), ts=time.time())
 
@@ -48,6 +49,8 @@ class FakePlatform:
         self.failing = failing
         self.device_status = "Printing"
         self.reject_actions = False
+        self.action_delay_s = 0.0
+        self.action_started = asyncio.Event()
         self.report_status = 200
         self.http_calls: list[tuple[str, str]] = []
         self.http_requests: list[dict[str, Any]] = []
@@ -77,6 +80,9 @@ class FakePlatform:
             return 200, self.releases
         if hostname == "sentry.io" or hostname.endswith(".sentry.io"):
             return self.report_status, {}
+        if method == "POST" and "/api/job" in url:
+            self.action_started.set()
+            await asyncio.sleep(self.action_delay_s)
         if self.reject_actions and method == "POST" and "/api/job" in url:
             raise RuntimeError("printer refused")
         return 200, {"state": self.device_status, "progress": {"completion": 40.0}, "job": {"file": {"name": "benchy.gcode"}}}
