@@ -37,8 +37,8 @@ function CameraCard({ camera }: { camera: Camera }) {
       ) : (
         <span
           aria-hidden
-          className={`led ${camera.inferring ? "led-infer" : camera.online ? "led-on" : "led-off"}`}
-          title={camera.online ? "online" : "offline"}
+          className={`led ${camera.online ? "led-on" : "led-off"}`}
+          title={camera.online ? "online" : camera.standby ? "standby" : "offline"}
         />
       )}
       <div className="order-1 min-w-0 flex-1 leading-tight sm:flex-none sm:w-36">

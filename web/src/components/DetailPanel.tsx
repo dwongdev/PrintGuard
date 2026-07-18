@@ -83,7 +83,7 @@ export function DetailPanel({ monitor }: { monitor: Monitor }) {
         <div className="sticky top-0 z-10 bg-ink-1/95 backdrop-blur-sm flex items-center gap-2.5 px-5 py-3.5 border-b border-line-0">
           <span
             aria-hidden
-            className={`led ${monitor.alert ? "led-bad" : camera?.inferring ? "led-infer" : monitor.watching && camera?.online ? "led-on" : "led-off"}`}
+            className={`led ${monitor.alert ? "led-bad" : monitor.watching && camera?.online ? "led-on" : "led-off"}`}
           />
           <h2 id={titleId} className="display text-lg font-semibold flex-1 truncate">
             {monitor.name}

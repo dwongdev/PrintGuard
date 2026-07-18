@@ -54,7 +54,7 @@ function CameraRow({ camera, focus }: { camera: Camera; focus: boolean }) {
   return (
     <div ref={ref} className="panel overflow-hidden">
       <div className="flex items-center gap-3 px-3 py-2">
-        <span className={`led ${camera.online ? "led-on" : "led-off"}`} />
+        <span className={`led ${camera.online ? "led-on" : "led-off"}`} title={camera.online ? "online" : camera.standby ? "standby" : "offline"} />
         <div className="flex-1 min-w-0 leading-tight">
           <div className="text-sm font-medium truncate">{camera.name}</div>
           <div className="mono text-[0.62rem] text-text-2 truncate">{sourceLabel(camera.source)}</div>
@@ -136,13 +136,14 @@ function CameraRow({ camera, focus }: { camera: Camera; focus: boolean }) {
   );
 }
 
-function CameraList({ cameras }: { cameras: Camera[] }) {
+function CameraList({ cameras, focusId }: { cameras: Camera[]; focusId?: string | null }) {
   const { focusCameraId } = useStore();
+  const focused = focusId ?? focusCameraId;
   if (!cameras.length) return null;
   return (
     <div className="space-y-2 mb-6">
       {cameras.map((camera) => (
-        <CameraRow key={camera.id} camera={camera} focus={camera.id === focusCameraId} />
+        <CameraRow key={camera.id} camera={camera} focus={camera.id === focused} />
       ))}
     </div>
   );
@@ -214,7 +215,7 @@ function DevicePicker({ onAdd }: { onAdd: (name: string, source: CameraSource) =
   );
 }
 
-function HubAdd({ onDone }: { onDone: () => void }) {
+function HubAdd({ onDone, onDeviceAdd }: { onDone: () => void; onDeviceAdd: (name: string, source: CameraSource) => void }) {
   const { send, toast, isPending } = useStore();
   const desktopApp = "pywebview" in window;
   const [tab, setTab] = useState<"url" | "publish">("url");
@@ -296,12 +297,7 @@ function HubAdd({ onDone }: { onDone: () => void }) {
             This computer's cameras register on the hub itself, so they keep watching from the tray
             with every window closed.
           </p>
-          <DevicePicker
-            onAdd={(name, source) => {
-              send({ cmd: "camera.add", name, source });
-              onDone();
-            }}
-          />
+          <DevicePicker onAdd={onDeviceAdd} />
         </div>
       )}
       {tab === "publish" && !desktopApp && (
@@ -333,6 +329,12 @@ export function CamerasDialog() {
   const close = () => openDialog(null);
   const isLocal = engine?.mode === "local";
   const cameras = engine?.cameras ?? [];
+  const [previewDeviceId, setPreviewDeviceId] = useState<string | null>(null);
+  const previewCameraId = cameras.find((camera) => camera.source.device_id === previewDeviceId)?.id;
+  const registerDevice = (name: string, source: CameraSource) => {
+    setPreviewDeviceId(source.device_id ?? null);
+    send({ cmd: "camera.add", name, source });
+  };
   const focusIsPrinter = cameras.some((c) => c.id === focusCameraId && c.printer_id);
   const [tab, setTab] = useState<"cameras" | "printers">(focusIsPrinter ? "printers" : "cameras");
   const tabs: Array<["cameras" | "printers", string]> = [
@@ -354,12 +356,12 @@ export function CamerasDialog() {
       </div>
       {tab === "cameras" ? (
         <>
-          <CameraList cameras={cameras.filter((c) => !c.printer_id)} />
+          <CameraList cameras={cameras.filter((c) => !c.printer_id)} focusId={previewCameraId} />
           <div className="label mb-3">Register new</div>
           {isLocal ? (
-            <DevicePicker onAdd={(name, source) => send({ cmd: "camera.add", name, source })} />
+            <DevicePicker onAdd={registerDevice} />
           ) : (
-            <HubAdd onDone={() => {}} />
+            <HubAdd onDone={() => {}} onDeviceAdd={registerDevice} />
           )}
         </>
       ) : (

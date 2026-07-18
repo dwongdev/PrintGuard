@@ -6,7 +6,7 @@ That needs a raw TLS socket, which the browser sandbox forbids, so this
 adapter runs in hub mode only (browser_ok is False).
 
 The user must enable LAN Only Mode and then Developer Mode on the printer
-(Settings > Network) — Developer Mode is what opens the MQTT channel on
+(Settings > Network) - Developer Mode is what opens the MQTT channel on
 current firmware. The access code is shown on that screen; the serial
 number is under Settings > Device.
 

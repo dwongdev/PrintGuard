@@ -1,11 +1,11 @@
 """Sends anonymous bug reports to the project's Sentry feedback inbox.
 
-A report is a single user-initiated POST of a Sentry envelope — a feedback
+A report is a single user-initiated POST of a Sentry envelope - a feedback
 item carrying the user's description and optional contact email, plus a
 sanitised diagnostics bundle, the engine and UI log tails and any files the
 user attached. There is no SDK and no automatic telemetry: nothing leaves
 the device unless the user submits a report, and every credential is
-stripped before it does — structurally from the diagnostics, and by value
+stripped before it does - structurally from the diagnostics, and by value
 from the freeform log text, where a library error message may embed one.
 """
 

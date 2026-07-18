@@ -21,7 +21,7 @@ cd web && npm run build                   # production UI build
 python printguard/pysrc.py web/public/pysrc.zip   # rebuild the Pyodide source archive for the static demo
 ```
 
-There is no separate Python lint step in the project's required checks — `uv run pytest`
+There is no separate Python lint step in the project's required checks - `uv run pytest`
 and `npm run typecheck` are the gates (see CONTRIBUTING.md "Release cycle").
 
 ## Architecture
@@ -42,7 +42,7 @@ essentials a change must respect:
   [`engine/engine.py`](printguard/engine/engine.py) dispatches commands through its
   `_handlers` map and broadcasts events to subscribed transport "sinks". `state_event()`
   is the full snapshot the UI renders; any new engine-owned data the UI needs is added
-  there. The UI is **presentation-only** — it never holds logic the engine should own. The
+  there. The UI is **presentation-only** - it never holds logic the engine should own. The
   transport is a WebSocket in hub mode and an in-page Pyodide bridge in local mode, and the
   engine cannot tell which.
 
@@ -57,7 +57,7 @@ essentials a change must respect:
   ([`engine/notifiers/`](printguard/engine/notifiers/)) subclass the contracts in
   [`engine/adapters.py`](printguard/engine/adapters.py), talk to the outside world *only*
   through `platform.http`, and are registered in their package `__init__.py`. Adding one
-  needs no other change in either mode — the config form, connection test, polling and
+  needs no other change in either mode - the config form, connection test, polling and
   actions all follow from the adapter. CONTRIBUTING.md has the step-by-step.
 
 - **Programmatic surface is hub-only.** The REST API (`server/api.py`, `/api/v1`) and MCP
@@ -70,7 +70,7 @@ essentials a change must respect:
 
 - **Fail safe, fail loud.** A monitor's `watching` state gates inference; only a *positive*
   "not printing" stands it down (losing the signal keeps watching). Nothing on the alert
-  path swallows errors — failed printer actions, notifier failures and dropped feeds emit
+  path swallows errors - failed printer actions, notifier failures and dropped feeds emit
   `error`/`warning` events. See `engine/watchdog.py`.
 
 - **State** persists through `platform.load_state()`/`save_state()` (a JSON file on the
@@ -79,7 +79,7 @@ essentials a change must respect:
 ## Conventions
 
 - **No comments; let names document intent.** The TypeScript/React UI carries **no** comments
-  or JSDoc — never narrate what the code does. In the Python engine/server, every module, class
+  or JSDoc - never narrate what the code does. In the Python engine/server, every module, class
   and public method gets a docstring, but still no inline comments unless the *why* is genuinely
   non-obvious.
 - **Minimal and consolidated.** No fallbacks, defensive guards or speculative abstractions
@@ -98,7 +98,7 @@ essentials a change must respect:
 
 Merging to `main` ships a release, so every PR carries its own metadata: a version bump and
 a matching top section in [CHANGELOG.md](CHANGELOG.md) ([Keep a Changelog](https://keepachangelog.com)
-form), which is published **verbatim** as the GitHub release notes — write it for someone
+form), which is published **verbatim** as the GitHub release notes - write it for someone
 deciding whether to pull the new image, not about the implementation. Three required checks
 must pass: **tests**, the production **image** build, and **version** (bumped past the last
 release with a matching changelog section). Docker is the only supported distribution.

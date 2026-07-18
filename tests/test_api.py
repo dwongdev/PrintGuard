@@ -2,9 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
 
 import httpx
+import numpy as np
 import pytest
 
 from fakes import FakePlatform
@@ -222,6 +226,106 @@ def test_callable_mjpeg_sources_cap_pyav_probe(monkeypatch) -> None:
         "format": "mjpeg",
         "options": {"analyzeduration": "0", "probesize": "32"},
     }, "live MJPEG pipes cap PyAV probing so av.open returns instead of draining frames"
+
+
+def test_direct_camera_source_wakes_for_viewers(monkeypatch) -> None:
+    from printguard.server import platform
+
+    monkeypatch.setattr(platform.AVSource, "_run", lambda self: None)
+    now = [100.0]
+    monkeypatch.setattr(platform.time, "monotonic", lambda: now[0])
+    source = platform.AVSource("http://camera/stream", "rtsp://mediamtx/camera")
+    source.set_monitoring(False)
+    assert not source.standby
+    now[0] += platform.DEMAND_IDLE_S
+    assert source.standby
+    source.view()
+    assert not source.standby
+    source.close()
+
+
+def test_pullable_camera_source_leaves_viewing_to_mediamtx(monkeypatch) -> None:
+    from printguard.server import platform
+
+    monkeypatch.setattr(platform.AVSource, "_run", lambda self: None)
+    now = [100.0]
+    monkeypatch.setattr(platform.time, "monotonic", lambda: now[0])
+    source = platform.AVSource("rtsp://mediamtx/camera")
+    source.set_monitoring(False)
+    now[0] += platform.DEMAND_IDLE_S
+    source.view()
+    assert source.standby
+    source.close()
+
+
+async def test_view_camera_renews_demand_after_cold_start() -> None:
+    from printguard.server import platform
+
+    source = SimpleNamespace(online=True, view=Mock(return_value=True))
+    server = object.__new__(platform.ServerPlatform)
+    server._sources = {"camera": source}
+
+    await server.view_camera("camera")
+
+    assert source.view.call_count == 2
+
+
+async def test_cancelled_camera_open_closes_platform_source(monkeypatch) -> None:
+    from printguard.server import platform
+
+    source = SimpleNamespace(online=False, fps=0.0, last_error=None, close=Mock())
+    monkeypatch.setattr(platform, "AVSource", lambda *args: source)
+    server = object.__new__(platform.ServerPlatform)
+    server.mediamtx = SimpleNamespace(rtsp_url=Mock(return_value="rtsp://mediamtx/camera"))
+    server._sources = {}
+    task = asyncio.create_task(server.open_camera("camera", {"kind": "url", "url": "http://camera/stream"}))
+    await asyncio.sleep(0)
+
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    source.close.assert_called_once()
+    assert server._sources == {}
+
+
+async def test_releasing_pull_camera_removes_managed_path() -> None:
+    from printguard.server import platform
+
+    source = SimpleNamespace(close=Mock())
+    server = object.__new__(platform.ServerPlatform)
+    server.mediamtx = SimpleNamespace(remove_path=AsyncMock())
+    server._sources = {"camera": source}
+
+    await server.release_camera("camera", {"kind": "url", "url": "rtsp://camera/live"})
+
+    source.close.assert_called_once()
+    server.mediamtx.remove_path.assert_awaited_once_with("camera")
+
+
+async def test_camera_source_converts_only_grabbed_frames(monkeypatch) -> None:
+    from printguard.server import platform
+
+    monkeypatch.setattr(platform.AVSource, "_run", lambda self: None)
+
+    class VideoFrame:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        def to_ndarray(self, *, format: str):
+            self.calls += 1
+            return np.zeros((48, 64, 3), dtype=np.uint8)
+
+    frame = VideoFrame()
+    source = platform.AVSource("rtsp://mediamtx/camera")
+    source._latest = (frame, 1.0, 2.0)
+    first = await source.grab()
+    second = await source.grab()
+    source.close()
+
+    assert first is second
+    assert first is not None and first.seq == 1.0 and first.ts == 2.0
+    assert frame.calls == 1
 
 
 async def test_unknown_ids_and_events() -> None:

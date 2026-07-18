@@ -1,15 +1,15 @@
 # Deploying a hub securely
 
-A hub exposes everything a browser needs — dashboard, engine socket, live video and
-device publishing — on a single HTTP port, `:8000`. The streaming server is built into the
+A hub exposes everything a browser needs - dashboard, engine socket, live video and
+device publishing - on a single HTTP port, `:8000`. The streaming server is built into the
 same image and listens on `:8554`/`:1935` only so LAN cameras can push streams in (its
 control API and HLS muxer bind to localhost inside the container); nothing else needs to be
 reachable. PrintGuard ships **no authentication**: anyone who can reach `:8000` sees every
-camera and can pause or cancel your printers. Never port-forward it from the internet — put
+camera and can pause or cancel your printers. Never port-forward it from the internet - put
 one of the following in front instead. Each one carries full functionality, live video
 included, because video is plain HTTP through the same port.
 
-## Option 1 — Tailscale (recommended for private hubs)
+## Option 1 - Tailscale (recommended for private hubs)
 
 Private access for you and people you invite; nothing is reachable from the public
 internet. Authentication is your tailnet identity.
@@ -18,7 +18,7 @@ internet. Authentication is your tailnet identity.
    devices, and `tailscale up` on each.
 2. Open `http://<hub-machine-name>:8000` from any device on the tailnet. Invite others
    from the Tailscale admin console if they should have access.
-3. For HTTPS — which browsers require before they allow camera access, so it is needed
+3. For HTTPS - which browsers require before they allow camera access, so it is needed
    for local mode and "this device" publishing from phones:
 
    ```bash
@@ -27,7 +27,7 @@ internet. Authentication is your tailnet identity.
 
    Then open `https://<hub-machine-name>.<tailnet>.ts.net`.
 
-## Option 2 — Cloudflare Tunnel + Access
+## Option 2 - Cloudflare Tunnel + Access
 
 A public HTTPS URL with no open ports on your network; every request (including the
 WebSockets and video) must pass a Cloudflare Access policy first.
@@ -50,9 +50,9 @@ WebSockets and video) must pass a Cloudflare Access policy first.
 4. If the host machine sits on a network you don't fully trust, also bind the local
    ports so only the tunnel can reach the app: `"127.0.0.1:8000:8000"`.
 
-## Option 3 — oauth2-proxy on your own domain
+## Option 3 - oauth2-proxy on your own domain
 
-For a hub behind a reverse proxy you manage —
+For a hub behind a reverse proxy you manage -
 [oauth2-proxy](https://oauth2-proxy.github.io/oauth2-proxy/) authenticates against
 GitHub/Google/any OIDC provider and proxies everything, WebSockets included, to
 PrintGuard:
@@ -81,7 +81,7 @@ PrintGuard:
 Terminate TLS in front with Caddy or nginx (or a Cloudflare Tunnel pointed at `:4180`),
 and bind PrintGuard's own port to localhost so the proxy is the only way in.
 
-The hub rejects any WebSocket whose `Origin` is not its own — the auth proxy checks the
+The hub rejects any WebSocket whose `Origin` is not its own - the auth proxy checks the
 session cookie, which the browser also attaches to sockets opened by other sites, so this
 is what stops a logged-in user's other tabs from driving the engine. It recognises the
 dashboard automatically when the proxy preserves the `Host` or sends `X-Forwarded-Host`
@@ -99,11 +99,11 @@ public origin so the hub trusts it:
 - There are no per-user roles: anyone who authenticates sees every camera and can control
   every printer. Only let in people you would hand the printer to.
 - The streaming server's control API (`:9997`) and HLS muxer (`:8888`) bind to `127.0.0.1`
-  inside the container, so they stay unreachable from outside even if a port is published —
+  inside the container, so they stay unreachable from outside even if a port is published -
   the hub talks to them over loopback and proxies HLS out through `:8000`.
 - When a proxy on the same host is the only intended client, bind ports to
   `127.0.0.1:…` in the compose file.
 - WebSocket handshakes are origin-checked, so the auth proxy is not relied on to block
   cross-site sockets. Set `PRINTGUARD_ORIGINS` only if your proxy rewrites the host header.
-- Update with `docker compose pull && docker compose up -d` — `latest` moves on every
+- Update with `docker compose pull && docker compose up -d` - `latest` moves on every
   release.

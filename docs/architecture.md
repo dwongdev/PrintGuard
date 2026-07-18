@@ -3,7 +3,7 @@
 PrintGuard is a monolith where the engine is shared code and runs unchanged on
 CPython (hub mode) and on Pyodide in the browser (local mode). Everything
 mode-specific is confined to one `Platform` implementation per runtime. The two modes
-cannot drift apart because there is nothing to drift — they execute the same files.
+cannot drift apart because there is nothing to drift - they execute the same files.
 
 ```mermaid
 flowchart LR
@@ -49,7 +49,7 @@ needs but cannot implement portably. Identical signatures, different runtimes:
 | `encode_jpeg(rgb)` | PyAV mjpeg | canvas `toBlob` |
 | `load_state` / `save_state` | `data/state.json` | `localStorage` |
 
-The UI is presentation-only and speaks one JSON command/event protocol — over a WebSocket
+The UI is presentation-only and speaks one JSON command/event protocol - over a WebSocket
 in hub mode, over an in-page Pyodide bridge in local mode. The engine cannot tell which
 transport it is on. **Never add mode-specific logic anywhere else**; if a feature needs a
 runtime service, extend the Platform contract on both sides.
@@ -81,9 +81,9 @@ Events (engine → UI): a full `state` snapshot (on connect, after every command
 `report_sent` and `error` events.
 
 `report.send` is the anonymous bug report ([`engine/reports.py`](../printguard/engine/reports.py)):
-one user-initiated POST of a Sentry feedback envelope — description, optional contact email,
+one user-initiated POST of a Sentry feedback envelope - description, optional contact email,
 user-attached files, a diagnostics bundle and the engine and UI log tails, with every
-credential redacted — through `platform.http`, so it works identically in both modes. There
+credential redacted - through `platform.http`, so it works identically in both modes. There
 is no SDK and no automatic telemetry; nothing is sent unless the user submits a report.
 
 ## Logging
@@ -93,7 +93,7 @@ points call it once and records flow to stdout for `docker logs`, to a rotating 
 no console exists (the desktop app sets `LOG_FILE` in its data directory), and into a
 bounded in-memory tail. Emitted alert, warning, error and device events are logged as they
 broadcast, so the tail carries the same timeline the UI shows plus the lifecycle around it
-— boot, camera attach/drop, resource registration, printer actions, API and socket denials.
+- boot, camera attach/drop, resource registration, printer actions, API and socket denials.
 Uvicorn runs without its own log config so its records land in the same handlers. The UI
 keeps its own ring ([`web/src/log.ts`](../web/src/log.ts)) of boot milestones, socket drops,
 toasts, console warnings/errors and uncaught exceptions. Bug reports attach both tails,
@@ -103,7 +103,7 @@ exception tracebacks.
 ## The programmatic surface (hub only)
 
 The MCP server, REST API and Home Assistant MQTT bridge are thin transports over the same
-commands the UI sends — they add no logic of their own, so they cannot drift from the
+commands the UI sends - they add no logic of their own, so they cannot drift from the
 dashboard. All are hub only (they need a server runtime, like `server/publish.py`); local
 mode never mounts them.
 
@@ -138,7 +138,13 @@ allocation is fully dynamic:
    dispatch time. Frames carry a sequence identity, so the same frame is never inferred
    twice and results always describe the present, not a backlog.
 
-MediaMTX bursts the buffered GOP on RTSP connect, so stream fps istrusted from the SDP `average_rate`, else measured only after a warm-up.
+MediaMTX bursts the buffered GOP on RTSP connect, so stream fps is trusted from the SDP
+`average_rate`, else measured only after a warm-up.
+
+Hub camera capture is demand-driven. A source stays active while an enabled monitor is watching
+or while an HLS viewer is requesting it. MediaMTX pulls RTSP, RTMP and WHEP sources on demand;
+PrintGuard wakes its own MJPEG, Bambu and device-camera publisher for viewers. A positively idle
+printer lets the source sleep, while an unknown or unreachable printer keeps it active.
 
 ## The defect pipeline
 
@@ -179,23 +185,23 @@ A monitor's **watching** state gates inference
 | `idle` / `paused` / `error` | no (standby) | positively not printing |
 
 Only a *positive* "not printing" stands inference down. The watchdog loop then
-keeps the whole pipeline honest — each sustained condition warns exactly once (after a
+keeps the whole pipeline honest - each sustained condition warns exactly once (after a
 grace period, so reconnecting sources don't flap) and announces recovery:
 
 - a watched camera goes **offline**,
-- a watched camera stays online but stops producing fresh frames (**stalled** — a frozen
+- a watched camera stays online but stops producing fresh frames (**stalled** - a frozen
   RTSP feed must not pass for monitoring),
 - a linked printer service becomes **unreachable** (defects could no longer pause it).
 
 Warnings surface as dashboard toasts and go out through the notification channels.
-Notifier delivery failures and inference crashes emit `error` events — there is no
+Notifier delivery failures and inference crashes emit `error` events - there is no
 silent `except: pass` anywhere in the alert path.
 
 ## Repository layout
 
 ```
 printguard/
-  engine/            shared engine — runs on CPython and Pyodide
+  engine/            shared engine - runs on CPython and Pyodide
     registry.py      camera + printer registries (registered resources)
     monitors.py      monitor config: a camera + printer pairing and its thresholds
     printers.py      registered-printer (integration connection) validation
@@ -220,4 +226,4 @@ tests/               engine simulation + adapter contract tests (pytest)
 Local mode needs no backend at all, so the same `web/dist` build deploys to GitHub Pages:
 the release workflow zips the engine source (`printguard/pysrc.py`), copies `models/`
 into the bundle, and every asset is fetched base-relative. The mode picker probes
-`api/health` — when no hub answers, the hub card becomes a Docker self-host link.
+`api/health` - when no hub answers, the hub card becomes a Docker self-host link.

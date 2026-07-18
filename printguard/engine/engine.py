@@ -57,7 +57,8 @@ class Engine:
         self.watchdog = Watchdog(self)
         self._sinks: list[Callable[[dict[str, Any]], None]] = []
         self._recent: deque[dict[str, Any]] = deque(maxlen=RECENT_EVENTS_MAX)
-        self._tasks: list[asyncio.Task] = []
+        self._tasks: list[asyncio.Task[None]] = []
+        self._attach_tasks: dict[str, asyncio.Task[None]] = {}
         self._handlers: dict[str, Any] = {
             "discover": self._cmd_discover,
             "camera.add": self._cmd_camera_add,
@@ -111,7 +112,7 @@ class Engine:
                 rotation=settings["rotation"],
             )
             self.cameras.add(camera)
-            asyncio.ensure_future(self._attach(camera))
+            self._schedule_attach(camera)
         self.cameras.sync_in_use(self.monitors, self.printers)
         self._tasks = [
             asyncio.ensure_future(self.scheduler.run()),
@@ -134,8 +135,10 @@ class Engine:
         """Cancels background loops and closes every frame source."""
         for task in self._tasks:
             task.cancel()
+        await asyncio.gather(*self._tasks, return_exceptions=True)
+        await self.watchdog.close()
         for camera_id in list(self.cameras.items):
-            self.cameras.remove(camera_id)
+            await self._drop_camera(camera_id)
         await asyncio.gather(*(adapter.close() for adapter in INTEGRATIONS.values()))
         logger.info("engine stopped")
 
@@ -154,7 +157,7 @@ class Engine:
 
         Alert, warning, error and device events are also written to the log,
         so the log tail carries the same timeline a maintainer sees in a bug
-        report's recent events — plus everything around it.
+        report's recent events - plus everything around it.
         """
         level = EVENT_LOG_LEVELS.get(event.get("event", ""))
         if level is not None:
@@ -269,7 +272,7 @@ class Engine:
         """Classifies a supplied frame, returning the model's verdict and defect score.
 
         Decodes the image on the platform and runs the same inference the scheduler
-        uses — the stateless equivalent of a camera's latest per-frame result, for a
+        uses - the stateless equivalent of a camera's latest per-frame result, for a
         frame the caller already holds rather than one PrintGuard pulls itself.
         """
         rgb = await self.platform.decode_jpeg(data)
@@ -310,10 +313,38 @@ class Engine:
         except Exception as exc:
             logger.debug("camera '%s' (%s) failed to attach: %s", camera.name, camera.id, exc)
             return
+        if self.cameras.get(camera.id) is not camera:
+            source.close()
+            await self.platform.release_camera(camera.id, camera.source)
+            return
         camera.frame_source = source
+        source.set_monitoring(camera.in_use)
         if source.fps > 0:
             camera.max_fps = source.fps
         logger.info("camera '%s' (%s) attached at %.1f fps", camera.name, camera.id, source.fps)
+
+    def _schedule_attach(self, camera: Camera) -> None:
+        if camera.id in self._attach_tasks:
+            return
+        task = asyncio.create_task(self._attach(camera))
+        self._attach_tasks[camera.id] = task
+
+        def forget(done: asyncio.Task[None]) -> None:
+            if self._attach_tasks.get(camera.id) is done:
+                self._attach_tasks.pop(camera.id)
+
+        task.add_done_callback(forget)
+
+    async def restart_camera(self, camera: Camera) -> None:
+        """Releases a failed camera source and attaches it again from scratch."""
+        source = camera.frame_source
+        if source is None:
+            return
+        camera.frame_source = None
+        source.close()
+        await self.platform.release_camera(camera.id, camera.source)
+        if self.cameras.get(camera.id) is camera:
+            self._schedule_attach(camera)
 
     async def _ticker(self) -> None:
         tick = 0
@@ -323,7 +354,7 @@ class Engine:
             for camera in self.cameras.values():
                 if camera.frame_source is None:
                     if tick % REATTACH_EVERY_TICKS == 0:
-                        asyncio.ensure_future(self._attach(camera))
+                        self._schedule_attach(camera)
                 elif camera.frame_source.fps > 0:
                     camera.max_fps = camera.frame_source.fps
             self.emit(self.state_event())
@@ -397,6 +428,7 @@ class Engine:
         )
         source = await self.platform.open_camera(camera_id, camera.source)
         camera.frame_source = source
+        source.set_monitoring(camera.in_use)
         if source.fps > 0:
             camera.max_fps = source.fps
         self.cameras.add(camera)
@@ -432,6 +464,10 @@ class Engine:
 
     async def _drop_camera(self, camera_id: str) -> None:
         camera = self.cameras.remove(camera_id)
+        task = self._attach_tasks.pop(camera_id, None)
+        if task:
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
         if camera:
             await self.platform.release_camera(camera.id, camera.source)
         for monitor in self.monitors.values():
@@ -478,6 +514,7 @@ class Engine:
                 logger.warning("printer camera '%s' failed to open: %s", descriptor["name"], exc)
                 continue
             camera.frame_source = source
+            source.set_monitoring(camera.in_use)
             if source.fps > 0:
                 camera.max_fps = source.fps
             self.cameras.add(camera)

@@ -1,7 +1,7 @@
 # API & MCP
 
 A PrintGuard **hub** exposes its engine to agents and developers through two transports
-over one protocol — the same commands the dashboard sends, so nothing here can drift from
+over one protocol - the same commands the dashboard sends, so nothing here can drift from
 the UI:
 
 - a **Model Context Protocol** server at `/mcp/` (Streamable HTTP) for agents, and
@@ -11,7 +11,7 @@ Both are hub-only. Local (in-browser) mode has no server to host them.
 
 ## Authentication & scopes
 
-PrintGuard ships no identity layer of its own — put a proxy in front of the hub
+PrintGuard ships no identity layer of its own - put a proxy in front of the hub
 ([docs/deployment.md](deployment.md)). On top of that, the API and MCP surface is gated by
 **capability scopes** so you can decide exactly what an agent may do.
 
@@ -23,9 +23,9 @@ Scopes are cumulative:
 | `control` | everything in `read`, plus pause / resume / cancel a print |
 | `manage` | everything in `control`, plus add/remove/edit cameras, printers and monitors, change settings, test printer services and notifiers, discover cameras |
 
-Issue scoped **bearer tokens** from the dashboard — **Settings → API & MCP access**. Name a
+Issue scoped **bearer tokens** from the dashboard - **Settings → API & MCP access**. Name a
 token, choose its scope and **Generate**; the full secret (a `pg_…` string) is shown
-**once**, so copy it then. Only a hash is stored, so a token can never be retrieved later —
+**once**, so copy it then. Only a hash is stored, so a token can never be retrieved later -
 if one is lost, revoke it and issue another. Revoking takes effect immediately.
 
 ```http
@@ -33,12 +33,12 @@ Authorization: Bearer pg_Zr8...agent
 ```
 
 - **No tokens issued (default):** the surface is **read-only** and trusts whatever
-  fronts it — control and management stay closed until you issue a token.
+  fronts it - control and management stay closed until you issue a token.
 - **Any token issued:** a valid bearer is required for every request; its scope
   decides what it can reach. MCP additionally **hides** tools a token cannot use.
 
 Tokens are stored hashed and are managed only from the UI (behind your proxy), never over
-the API itself — an agent holding a `manage` token can drive printers and cameras but
+the API itself - an agent holding a `manage` token can drive printers and cameras but
 cannot mint or escalate tokens. Serve the hub over HTTPS so tokens are never sent in clear.
 
 ## REST API
@@ -65,14 +65,14 @@ Base path `/api/v1`. Requests and responses are JSON, except the camera frame, w
 | `POST` | `/printers` | manage | Register a printer |
 | `PATCH` | `/printers/{id}` | manage | Update a printer |
 | `DELETE` | `/printers/{id}` | manage | Remove a printer |
-| `POST` | `/printers/test` | manage | `{"provider", "config"}` — reachability |
+| `POST` | `/printers/test` | manage | `{"provider", "config"}` - reachability |
 | `POST` | `/cameras` | manage | Add a camera |
 | `PATCH` | `/cameras/{id}` | manage | Update a camera |
 | `DELETE` | `/cameras/{id}` | manage | Remove a camera |
 | `POST` | `/cameras/discover` | manage | List attachable, unregistered sources |
 | `POST` | `/cameras/refresh-printers` | manage | Register cameras newly exposed by registered printers |
 | `PATCH` | `/settings` | manage | Update settings (e.g. notifiers) |
-| `POST` | `/notifiers/test` | manage | `{"provider", "config"}` — send a test |
+| `POST` | `/notifiers/test` | manage | `{"provider", "config"}` - send a test |
 
 Interactive schema (OpenAPI) is served at `/api/v1/docs`.
 
@@ -129,7 +129,7 @@ npx @modelcontextprotocol/inspector
 
 ## The resource model
 
-Cameras and printers are **registered resources** — each is created and deleted only
+Cameras and printers are **registered resources** - each is created and deleted only
 through its own collection (`/cameras`, `/printers`). A **monitor** binds one camera and,
 optionally, one printer (by `camera_id` / `printer_id`) and carries the inference
 thresholds and defect-response policy; removing a resource clears it from any monitor that
@@ -142,16 +142,16 @@ MCP response; only the dashboard's own WebSocket, behind your proxy, receives th
 Every printer integration (OctoPrint, Klipper/Moonraker, Elegoo, PrusaLink, Bambu Lab, …) is normalised to one
 shape, so a printer reads and controls the same way regardless of its service.
 
-- **Status** — one of `printing`, `paused`, `idle`, `error`, `offline`, `unknown`.
-- **State** — `{ "status", "progress" (0–100), "job" }`, reported on printer objects as
+- **Status** - one of `printing`, `paused`, `idle`, `error`, `offline`, `unknown`.
+- **State** - `{ "status", "progress" (0–100), "job" }`, reported on printer objects as
   `device_state`.
-- **Actions** — `pause`, `resume`, `cancel`.
+- **Actions** - `pause`, `resume`, `cancel`.
 
 ## Reading detection state
 
 The response bodies below are what an integrator polls to answer "is this print failing?".
 Two facts matter and are easy to miss: the **camera** carries a per-frame *classification*,
-while the smoothed **0–1 defect score** is a per-**monitor** quantity — the camera object has
+while the smoothed **0–1 defect score** is a per-**monitor** quantity - the camera object has
 no numeric score field.
 
 **Camera object** (`GET /cameras`, `GET /cameras/{id}`):
@@ -175,7 +175,7 @@ no numeric score field.
 
 `last_result` is the newest raw classification, or `null` before the camera has been
 inferred. `prediction` is simply the **nearest class prototype** for that frame (no
-threshold applied) — the quickest per-camera "failing?" read. It is `"unknown"` when the
+threshold applied) - the quickest per-camera "failing?" read. It is `"unknown"` when the
 frame can't be classified (e.g. the embedding isn't finite).
 
 **Monitor object** (`GET /monitors`, `GET /monitors/{id}`): binds a camera (+ optional

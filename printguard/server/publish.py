@@ -1,7 +1,7 @@
 """Pushes camera video to MediaMTX over RTSP.
 
-Browser recordings (fragmented WebM/MP4 over a WebSocket) are remuxed — never
-transcoded — by remux(). Sources MediaMTX cannot pull itself, such as MJPEG
+Browser recordings (fragmented WebM/MP4 over a WebSocket) are remuxed - never
+transcoded - by remux(). Sources MediaMTX cannot pull itself, such as MJPEG
 over HTTP, are transcoded to H.264 by H264Push. Either way the result behaves
 like any other MediaMTX stream and reaches viewers as HLS.
 """

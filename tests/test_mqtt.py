@@ -1,5 +1,5 @@
 """MQTT bridge protocol shapes: Home Assistant discovery payloads, the
-per-monitor state blob and inbound command routing — the pure functions the
+per-monitor state blob and inbound command routing - the pure functions the
 bridge's aiomqtt session is a thin wrapper around."""
 
 from __future__ import annotations

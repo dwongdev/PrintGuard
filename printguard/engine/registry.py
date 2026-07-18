@@ -1,4 +1,4 @@
-"""Resource registries — cameras, integrated printers and API tokens — each an
+"""Resource registries - cameras, integrated printers and API tokens - each an
 id-keyed collection of records carrying identity, access details and any live
 runtime state."""
 
@@ -58,7 +58,7 @@ class Camera:
         id: Stable identifier used across the protocol and as the MediaMTX
             path name in hub mode.
         name: Display name.
-        source: Access details — {"kind": "device", "device_id": ...} in
+        source: Access details - {"kind": "device", "device_id": ...} in
             local mode, {"kind": "url" | "path", ...} in hub mode.
         printer_id: Owning printer when the camera was exposed by a printer
             integration, else None. Such cameras are managed by their printer:
@@ -96,6 +96,11 @@ class Camera:
         """Whether the camera's frame source is attached and healthy."""
         return self.frame_source is not None and self.frame_source.online
 
+    @property
+    def standby(self) -> bool:
+        """Whether capture is intentionally sleeping until it is needed."""
+        return self.frame_source is not None and self.frame_source.standby
+
     def mark_inferred(self, result: dict[str, Any]) -> None:
         """Records a completed inference and updates the achieved rate."""
         now = time.monotonic()
@@ -118,6 +123,7 @@ class Camera:
             "inferring": self.inferring,
             "in_use": self.in_use,
             "online": self.online,
+            "standby": self.standby,
             "last_result": self.last_result,
             "brightness": round(self.brightness, 2),
             "contrast": round(self.contrast, 2),
@@ -191,7 +197,7 @@ class Token:
     Attributes:
         id: Stable identifier used to name and revoke the token.
         name: Display name.
-        scope: Granted capability — one of read, control or manage.
+        scope: Granted capability - one of read, control or manage.
         hash: SHA-256 of the bearer secret, matched at auth time.
         hint: Short non-secret prefix shown in the UI.
         created: Unix timestamp the token was minted.
@@ -240,6 +246,8 @@ class CameraRegistry(Registry[Camera]):
         bound = {m["camera_id"] for m in monitors.values() if monitor_watching(m, printers)}
         for camera in self.values():
             camera.in_use = camera.id in bound
+            if camera.frame_source:
+                camera.frame_source.set_monitoring(camera.in_use)
 
 
 class PrinterRegistry(Registry[Printer]):

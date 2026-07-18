@@ -45,7 +45,7 @@ export function MonitorTile({ monitor, index }: { monitor: Monitor; index: numbe
         ) : (
           <span
             aria-hidden
-            className={`led ${alerting ? "led-bad" : camera?.inferring ? "led-infer" : monitor.watching && camera?.online ? "led-on" : "led-off"}`}
+            className={`led ${alerting ? "led-bad" : monitor.watching && camera?.online ? "led-on" : "led-off"}`}
           />
         )}
         <h3 className="display text-base font-semibold tracking-[0.08em] truncate flex-1">{monitor.name}</h3>

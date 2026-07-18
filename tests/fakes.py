@@ -18,12 +18,18 @@ class FakeSource:
     def __init__(self, fps: float) -> None:
         self.fps = fps
         self.online = True
+        self.standby = False
+        self.frozen = False
         self._born = time.monotonic()
 
     async def grab(self) -> Frame | None:
-        seq = int((time.monotonic() - self._born) * self.fps)
+        seq = 0 if self.frozen else int((time.monotonic() - self._born) * self.fps)
         rgb = np.full((48, 64, 3), seq % 255, dtype=np.uint8)
         return Frame(rgb=rgb, seq=float(seq), ts=time.time())
+
+    def set_monitoring(self, active: bool) -> None:
+        self.standby = not active
+        self.online = active
 
     def close(self) -> None:
         self.online = False
@@ -43,10 +49,13 @@ class FakePlatform:
         self.failing = failing
         self.device_status = "Printing"
         self.reject_actions = False
+        self.action_delay_s = 0.0
+        self.action_started = asyncio.Event()
         self.report_status = 200
         self.http_calls: list[tuple[str, str]] = []
         self.http_requests: list[dict[str, Any]] = []
         self.releases: list[dict[str, Any]] = []
+        self.released_cameras: list[str] = []
         self.state: dict[str, Any] = {}
 
     async def infer(self, rgb: np.ndarray) -> dict[str, Any]:
@@ -61,7 +70,7 @@ class FakePlatform:
         return FakeSource(float(source.get("fps", 15.0)))
 
     async def release_camera(self, camera_id: str, source: dict[str, Any]) -> None:
-        pass
+        self.released_cameras.append(camera_id)
 
     async def http(self, method: str, url: str, **kwargs: Any) -> tuple[int, Any]:
         self.http_calls.append((method, url))
@@ -71,6 +80,9 @@ class FakePlatform:
             return 200, self.releases
         if hostname == "sentry.io" or hostname.endswith(".sentry.io"):
             return self.report_status, {}
+        if method == "POST" and "/api/job" in url:
+            self.action_started.set()
+            await asyncio.sleep(self.action_delay_s)
         if self.reject_actions and method == "POST" and "/api/job" in url:
             raise RuntimeError("printer refused")
         return 200, {"state": self.device_status, "progress": {"completion": 40.0}, "job": {"file": {"name": "benchy.gcode"}}}

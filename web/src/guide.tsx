@@ -76,7 +76,8 @@ export const GUIDE: GuideSection[] = [
     body: (
       <>
         A monitor binds one camera (and optionally one printer) and carries the detection thresholds
-        and defect response. Inference is shared fairly across every monitor on watch.
+        and defect response. Inference is shared fairly across every monitor on watch. Its status dot
+        is green while watching, grey in standby or offline, and red during a defect alert.
       </>
     ),
     action: { label: "Add a monitor", dialog: "monitor" },

@@ -1,6 +1,6 @@
 """FastAPI application: serves the UI, model assets and the engine socket.
 
-The same image serves both modes — hub mode runs the engine here, while
+The same image serves both modes - hub mode runs the engine here, while
 local mode only needs the static UI, the model files and the Python
 source archive that Pyodide unpacks in the browser.
 """
@@ -171,10 +171,11 @@ def create_app() -> FastAPI:
     async def hls_proxy(path: str, request: Request) -> StreamingResponse:
         """Streams LL-HLS playlists and segments from MediaMTX through the hub's own port.
 
-        An unreachable MediaMTX answers 502 with a throttled warning — the
+        An unreachable MediaMTX answers 502 with a throttled warning - the
         dashboard polls playlists every second, so letting the error escape
         would flood the log with one ASGI traceback per poll.
         """
+        await app.state.engine.platform.view_camera(path.split("/", 1)[0])
         client: httpx.AsyncClient = app.state.hls
         try:
             upstream = await client.send(
@@ -233,7 +234,7 @@ def main() -> None:
     """Console entry point.
 
     Uvicorn runs without its own logging config so its records propagate to
-    the root handlers, and without access logs — per-request lines for the
+    the root handlers, and without access logs - per-request lines for the
     HLS polling would drown the tail that bug reports attach.
     """
     uvicorn.run(create_app(), host="0.0.0.0", port=int(os.environ.get("PORT", "8000")), log_config=None, access_log=False)

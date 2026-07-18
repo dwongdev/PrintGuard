@@ -7,6 +7,30 @@ release notes.
 The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.6] - 2026-07-19
+
+### Fixed
+
+- **Idle cameras no longer keep decoding and converting every frame.** When a printer is
+  positively idle and nobody is viewing its feed, PrintGuard puts the camera in standby and
+  resumes it automatically when printing or viewing starts. RTSP, RTMP and WHEP feeds are pulled
+  on demand, while MJPEG, Bambu and device cameras keep their existing browser-compatible H.264
+  bridge without running it unnecessarily. Unknown or unreachable printers remain monitored.
+- **Desktop webcams now preview immediately after registration.** The camera stays live while its
+  preview connects, then still enters standby after viewing or monitoring stops. Slow desktop
+  camera startup no longer leaves orphaned captures running after the window closes.
+- **Camera and monitor status lights no longer flicker between healthy colours.** Camera indicators
+  now show stable availability, while monitor indicators stay green when watching and switch red
+  only for a genuine defect alert.
+- **RTSP cameras recover after a damaged stream.** If packet loss or decoder errors leave a camera
+  offline, PrintGuard now replaces the failed reader and its MediaMTX pull automatically instead
+  of retrying the same broken session until the camera is toggled manually.
+- **Alert-only notifications now state that no printer action is configured.** This makes clear that
+  detection and push alerts are still active when a printer is powered off or unreachable.
+- **Printer actions and notifications no longer pause camera inference.** Slow or unreachable
+  services are handled independently while monitoring continues, and genuinely stalled camera
+  sources are replaced automatically after a fresh-frame timeout.
+
 ## [2.3.5] - 2026-07-15
 
 ### Fixed

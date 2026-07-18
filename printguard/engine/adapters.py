@@ -23,12 +23,12 @@ class Adapter(ABC):
         docs_url: Link to the official API reference the adapter is built
             against; mandatory so reviewers can verify behaviour.
         browser_ok: Whether the adapter can run in local (browser) mode.
-            Adapters needing a transport the browser sandbox forbids — a
-            raw socket, or HTTP to a service without CORS headers — set
+            Adapters needing a transport the browser sandbox forbids - a
+            raw socket, or HTTP to a service without CORS headers - set
             this False and are offered in hub mode only.
         desktop_only: Whether the adapter runs only in the desktop app (the
             hub packaged as a native window), where it can reach a service the
-            headless container and the browser cannot — a local OS call. Set
+            headless container and the browser cannot - a local OS call. Set
             this True and it is offered only when the UI runs inside that app.
         experimental: Whether the adapter is new and not yet battle-tested;
             the config form flags it so users know to expect rough edges.

@@ -35,6 +35,7 @@ MEASURE_WARMUP_S = 1.0
 OPEN_WAIT_S = 25.0
 CAMERA_CONSENT_WAIT_S = 60.0
 RECONNECT_DELAY_S = 3.0
+DEMAND_IDLE_S = 10.0
 MJPEG_LIVE_OPTIONS = {"analyzeduration": "0", "probesize": "32"}
 DEVICE_OPEN_OPTIONS = ({"framerate": "30"}, {"framerate": "15"}, {})
 """Frame rates tried, most common first, when a device's own capture formats
@@ -55,7 +56,7 @@ def _video_devices() -> list[tuple[str, str]]:
 
     libavdevice only exposes device discovery through its log stream, so the
     names are parsed from a capture of the listing call's messages, raised to
-    INFO for the duration. Screens are excluded — a capture of the host's own
+    INFO for the duration. Screens are excluded - a capture of the host's own
     display is never a printer camera. Listing needs no camera permission;
     only opening a device does.
     """
@@ -111,8 +112,8 @@ def _device_open_options(device_id: str) -> tuple[dict[str, str], ...]:
     """Capture options to try when opening a device, most specific first.
 
     ffmpeg's avfoundation ignores the requested frame rate when no size is given
-    and settles on the device's last-listed format — routinely its top
-    resolution pinned to a handful of fps — so 30/15fps requests come back as
+    and settles on the device's last-listed format - routinely its top
+    resolution pinned to a handful of fps - so 30/15fps requests come back as
     EAGAIN. On macOS the real formats are read from AVFoundation and the largest
     size within a sane cap that offers a usable rate is pinned explicitly; other
     platforms negotiate over common frame rates.
@@ -168,8 +169,8 @@ def _authorize_macos_camera() -> None:
     is undetermined starts a session that delivers no frames, and once refused
     the capture input fails instantly with EAGAIN. So consent is settled through
     AVFoundation first, blocking until the user answers. A grant recorded for a
-    previous build still reads as authorised while capture is refused — each
-    unsigned build re-signs ad hoc with a new identity — so an authorised state
+    previous build still reads as authorised while capture is refused - each
+    unsigned build re-signs ad hoc with a new identity - so an authorised state
     is probed with a real capture input, and a refusal resets this app's own
     consent entry to let the prompt be asked afresh. Other platforms gate
     camera capture without a per-process consent step.
@@ -234,11 +235,39 @@ class AVSource:
         self.fps = 0.0
         self.online = False
         self.last_error: str | None = None
-        self._latest: Frame | None = None
+        self._latest: tuple[av.VideoFrame, float, float] | None = None
+        self._latest_rgb: Frame | None = None
         self._seq = 0
         self._stop = False
+        self._monitoring = True
+        self._demand_until = 0.0
+        self._wake = threading.Event()
+        self._wake.set()
         self._thread = threading.Thread(target=self._run, daemon=True)
         self._thread.start()
+
+    @property
+    def standby(self) -> bool:
+        """Whether capture is sleeping until inference or a viewer needs it."""
+        return not self._demanded()
+
+    def _demanded(self) -> bool:
+        return self._monitoring or time.monotonic() < self._demand_until
+
+    def set_monitoring(self, active: bool) -> None:
+        """Keeps capture running while inference needs frames."""
+        if self._monitoring and not active:
+            self._demand_until = max(self._demand_until, time.monotonic() + DEMAND_IDLE_S)
+        self._monitoring = active
+        self._wake.set()
+
+    def view(self) -> bool:
+        """Keeps direct-source publishing alive for a recent HLS viewer."""
+        if self._publish_url is None:
+            return False
+        self._demand_until = time.monotonic() + DEMAND_IDLE_S
+        self._wake.set()
+        return True
 
     def _open(self) -> tuple[Any, Any]:
         """Opens the container, returning it and any pipe to close afterwards.
@@ -267,6 +296,11 @@ class AVSource:
 
     def _run(self) -> None:
         while not self._stop:
+            if not self._demanded():
+                self.online = False
+                self._wake.wait()
+                self._wake.clear()
+                continue
             container: Any = None
             push: H264Push | None = None
             pipe: Any = None
@@ -291,14 +325,14 @@ class AVSource:
                 if pipe is not None:
                     pipe.close()
             self.online = False
-            if not self._stop:
+            if not self._stop and self._demanded():
                 time.sleep(RECONNECT_DELAY_S)
 
     def _decode(self, container: Any, stream: Any, push: H264Push | None) -> None:
         """Keeps the freshest frame until the source ends, transcoding if asked.
 
         A capture device announces its stream before a frame is buffered, so the
-        first reads — and any gap between frames — surface as EAGAIN. That is not
+        first reads - and any gap between frames - surface as EAGAIN. That is not
         a disconnect: the open session is kept and the read retried, rather than
         torn down and reconnected as a network drop would be.
         """
@@ -307,10 +341,10 @@ class AVSource:
         while not self._stop:
             try:
                 for frame in container.decode(stream):
-                    if self._stop:
+                    if self._stop or not self._demanded():
                         return
                     self._seq += 1
-                    self._latest = Frame(rgb=frame.to_ndarray(format="rgb24"), seq=float(self._seq), ts=time.time())
+                    self._latest = (frame, float(self._seq), time.time())
                     self.online = True
                     if push is not None:
                         push.send(frame)
@@ -323,13 +357,24 @@ class AVSource:
                 time.sleep(0.02)
 
     async def grab(self) -> Frame | None:
-        """Returns the freshest decoded frame without copying."""
-        return self._latest
+        """Converts and returns the freshest decoded frame."""
+        latest = self._latest
+        if latest is None:
+            return None
+        frame, seq, ts = latest
+        if self._latest_rgb is not None and self._latest_rgb.seq == seq:
+            return self._latest_rgb
+        rgb = await asyncio.to_thread(frame.to_ndarray, format="rgb24")
+        result = Frame(rgb=rgb, seq=seq, ts=ts)
+        if self._latest is latest:
+            self._latest_rgb = result
+        return result
 
     def close(self) -> None:
         """Stops the reader thread."""
         self._stop = True
         self.online = False
+        self._wake.set()
 
 
 class ServerPlatform:
@@ -354,6 +399,7 @@ class ServerPlatform:
         data_dir.mkdir(parents=True, exist_ok=True)
         self._client = httpx.AsyncClient(follow_redirects=True)
         self.mediamtx = MediaMTX(mediamtx_api, mediamtx_rtsp, self._client)
+        self._sources: dict[str, AVSource] = {}
 
     async def close(self) -> None:
         """Releases the HTTP client and inference workers."""
@@ -396,13 +442,13 @@ class ServerPlatform:
         RTSP/RTMP URLs and WebRTC WHEP endpoints are pulled by MediaMTX;
         HTTP/MJPEG ones are read directly and transcoded back into MediaMTX so
         both inference and viewers see them. Device sources are the host's own
-        cameras, captured through libavdevice in this process — not a browser
-        page — so on the desktop app they keep watching with every window closed;
+        cameras, captured through libavdevice in this process - not a browser
+        page - so on the desktop app they keep watching with every window closed;
         they are republished the same way.
 
         The wait must outlast a freshly published path's cold start: the remux
         announcing the track, a not-found retry, the demuxer probe, a mid-GOP
-        join and — when the container declares no rate — measuring the fps.
+        join and - when the container declares no rate - measuring the fps.
         Together those approach twenty seconds; sources that are truly dead
         just take this long to report.
         """
@@ -431,18 +477,38 @@ class ServerPlatform:
         else:
             raise ValueError(f"hub mode cannot open source kind {source['kind']!r}")
         av_source = AVSource(target, publish_url, container_format, open_options)
-        deadline = time.monotonic() + OPEN_WAIT_S
-        while time.monotonic() < deadline and not (av_source.online and av_source.fps > 0):
-            await asyncio.sleep(0.2)
+        self._sources[camera_id] = av_source
+        try:
+            deadline = time.monotonic() + OPEN_WAIT_S
+            while time.monotonic() < deadline and not (av_source.online and av_source.fps > 0):
+                await asyncio.sleep(0.2)
+        except asyncio.CancelledError:
+            if self._sources.get(camera_id) is av_source:
+                await self.release_camera(camera_id, source)
+            else:
+                av_source.close()
+            raise
         if not av_source.online:
-            av_source.close()
             await self.release_camera(camera_id, source)
             detail = f": {av_source.last_error}" if av_source.last_error else ""
             raise RuntimeError(f"no frames from camera {camera_id}{detail}")
         return av_source
 
+    async def view_camera(self, camera_id: str) -> None:
+        """Wakes a direct camera source for an HLS request."""
+        source = self._sources.get(camera_id)
+        if not source or not source.view():
+            return
+        deadline = time.monotonic() + OPEN_WAIT_S
+        while time.monotonic() < deadline and not source.online:
+            await asyncio.sleep(0.1)
+        source.view()
+
     async def release_camera(self, camera_id: str, source: dict[str, Any]) -> None:
-        """Removes the MediaMTX path created for a URL-backed camera."""
+        """Closes the source and removes any MediaMTX pull path."""
+        av_source = self._sources.pop(camera_id, None)
+        if av_source:
+            av_source.close()
         if source["kind"] == "url" and pull_source(source["url"]) is not None:
             try:
                 await self.mediamtx.remove_path(camera_id)

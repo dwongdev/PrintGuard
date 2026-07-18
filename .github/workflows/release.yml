@@ -155,3 +155,37 @@ jobs:
           path: web/dist
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  follow-up:
+    name: reporter follow-up
+    needs: [version, docker, release, desktop, pages]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: read
+    steps:
+      - name: Ask related reporters to verify
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: v${{ needs.version.outputs.version }}
+        run: |
+          pr_number=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" --jq 'map(select(.merged_at != null))[0].number // empty')
+          if [ -z "$pr_number" ]; then
+            exit 0
+          fi
+          pr_body=$(gh pr view "$pr_number" --repo "$GITHUB_REPOSITORY" --json body --jq .body)
+          issue_numbers=$(printf '%s\n' "$pr_body" | awk 'tolower($0) ~ /^[[:space:]]*relates to /' | grep -oE '#[0-9]+' | tr -d '#' || true)
+          for issue_number in $issue_numbers; do
+            marker="<!-- release-follow-up:${VERSION} -->"
+            if gh api --paginate "repos/${GITHUB_REPOSITORY}/issues/${issue_number}/comments" --jq '.[].body' | grep -Fq "$marker"; then
+              continue
+            fi
+            labels=$(gh issue view "$issue_number" --repo "$GITHUB_REPOSITORY" --json labels --jq '.labels[].name')
+            if printf '%s\n' "$labels" | grep -Fxq "status: built"; then
+              gh issue edit "$issue_number" --repo "$GITHUB_REPOSITORY" --remove-label "status: built"
+            fi
+            gh issue edit "$issue_number" --repo "$GITHUB_REPOSITORY" --add-label "status: completed"
+            message="${marker}"$'\n\n'"${VERSION} is now live. Please update PrintGuard and let me know whether it resolves this issue. If it does, you can close the issue. Otherwise, leave it open and share any remaining details so I can follow up."
+            gh issue comment "$issue_number" --repo "$GITHUB_REPOSITORY" --body "$message"
+          done

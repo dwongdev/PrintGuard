@@ -160,6 +160,7 @@ class CameraOut(_ReadModel):
     inferring: bool | None = None
     in_use: bool | None = None
     online: bool | None = None
+    standby: bool | None = None
     last_result: LastResult | None = None
     brightness: float | None = None
     contrast: float | None = None
@@ -231,7 +232,7 @@ def public_state(engine: Engine) -> dict[str, Any]:
     """The engine snapshot with linked-service credentials stripped.
 
     The dashboard reads the engine's full state over the WebSocket, where trust
-    is total; this read surface — REST and the MCP tools derived from it — must
+    is total; this read surface - REST and the MCP tools derived from it - must
     report status without leaking the printer and notifier credentials those
     configs embed, nor the access codes a printer-exposed camera source carries.
     Redaction reuses the secret fields each adapter's schema already declares
@@ -396,7 +397,7 @@ def build_api_app(auth: ApiAuth) -> FastAPI:
         sensitivity: float = 1.0,
         engine: Engine = Depends(get_engine),
     ) -> dict[str, Any]:
-        """Classifies a supplied JPEG frame — the model's verdict without a registered camera."""
+        """Classifies a supplied JPEG frame - the model's verdict without a registered camera."""
         return await engine.classify(image, sensitivity)
 
     @api.post("/cameras", operation_id="add_camera", tags=["manage"], response_model=list[CameraOut])

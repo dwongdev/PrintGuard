@@ -108,6 +108,49 @@ async def test_defect_pipeline() -> None:
     assert ("POST", "http://disc/hook") in platform.http_calls, "Discord alert was never delivered"
 
 
+async def test_alert_only_notification_wording() -> None:
+    platform = FakePlatform(infer_s=0.02, failing=True)
+    async with running_engine(platform, camera_fps=[10.0]) as (engine, _events):
+        monitor_id = next(iter(engine.monitors))
+        await engine.handle({"cmd": "settings.update", "patch": {"notifiers": {"ntfy": {"url": "http://ntfy/topic"}}}})
+        await engine.handle({"cmd": "monitor.update", "id": monitor_id, "patch": {"notify": True, "consecutive": 1}})
+        await asyncio.sleep(1.0)
+
+    request = next(request for request in platform.http_requests if request["url"] == "http://ntfy/topic")
+    assert request["headers"]["Message"] == "Alert only: no printer action configured"
+
+
+async def test_slow_printer_action_does_not_pause_inference(monkeypatch) -> None:
+    monkeypatch.setattr(watchdog, "ACT_ATTEMPTS", 1)
+    monkeypatch.setattr(watchdog, "ACT_RETRY_S", 0.01)
+    monkeypatch.setattr(watchdog, "WATCH_TICK_S", 0.02)
+    monkeypatch.setattr(watchdog, "STALL_GRACE_S", 0.2)
+    platform = FakePlatform(infer_s=0.02)
+    platform.action_delay_s = 0.4
+    platform.reject_actions = True
+    async with running_engine(platform, camera_fps=[30.0]) as (engine, events):
+        monitor_id = next(iter(engine.monitors))
+        printer_id = await _register_printer(engine)
+        await engine.handle(
+            {
+                "cmd": "monitor.update",
+                "id": monitor_id,
+                "patch": {"printer_id": printer_id, "on_defect": "pause", "consecutive": 1},
+            }
+        )
+        platform.failing = True
+        await asyncio.wait_for(platform.action_started.wait(), 1.0)
+        before = len([event for event in events if event.get("event") == "result"])
+        await asyncio.sleep(0.2)
+        after = len([event for event in events if event.get("event") == "result"])
+        await asyncio.sleep(0.3)
+        alerts = [event for event in events if event.get("event") == "alert"]
+
+    assert after > before, "printer action I/O paused inference"
+    assert alerts and alerts[0]["action"] == "failed", "failed printer action did not complete in the background"
+    assert not any(event.get("event") == "warning" and "feed has stalled" in event["message"] for event in events)
+
+
 async def test_standby_gating() -> None:
     watchdog.DEVICE_POLL_S = 0.1
     platform = FakePlatform(infer_s=0.02, failing=True)
@@ -119,20 +162,86 @@ async def test_standby_gating() -> None:
         await asyncio.sleep(1.0)
         assert not engine.state_event()["monitors"][0]["watching"], "idle printer should be in standby"
         assert not engine.cameras.schedulable(), "standby monitor's camera should not be scheduled"
+        camera = engine.cameras.values()[0]
+        assert camera.standby and not camera.online, "standby camera capture should sleep"
         results_during_standby = len([e for e in events if e.get("event") == "result"])
 
         platform.device_status = "Printing"
         await asyncio.sleep(1.0)
         assert engine.state_event()["monitors"][0]["watching"], "printing printer should be watched"
+        assert not camera.standby and camera.online, "printing should wake camera capture"
         resumed = len([e for e in events if e.get("event") == "result"]) - results_during_standby
     assert resumed > 0, "inference did not resume when printing started"
 
 
-async def test_watchdog_and_failed_action() -> None:
+async def test_restored_camera_attachment_is_single_flight(monkeypatch) -> None:
+    from fakes import FakeSource
+    from printguard.engine import engine as engine_module
+    from printguard.engine.registry import Camera
+
+    platform = FakePlatform()
+    platform.state = {
+        "cameras": [Camera(id="slow", name="Slow", source={"kind": "fake", "fps": 30.0}, max_fps=30.0).persisted()]
+    }
+    release = asyncio.Event()
+    attempts = 0
+
+    async def open_camera(camera_id, source):
+        nonlocal attempts
+        attempts += 1
+        await release.wait()
+        return FakeSource(30.0)
+
+    monkeypatch.setattr(platform, "open_camera", open_camera)
+    monkeypatch.setattr(engine_module, "STATE_TICK_S", 0.01)
+    monkeypatch.setattr(engine_module, "REATTACH_EVERY_TICKS", 1)
+    engine = Engine(platform)
+    await engine.start()
+    try:
+        await asyncio.sleep(0.05)
+        assert attempts == 1
+        release.set()
+        await asyncio.sleep(0.02)
+        assert engine.cameras.get("slow").frame_source is not None
+    finally:
+        await engine.stop()
+
+
+async def test_removing_camera_cancels_pending_attachment(monkeypatch) -> None:
+    from printguard.engine.registry import Camera
+
+    platform = FakePlatform()
+    platform.state = {
+        "cameras": [Camera(id="slow", name="Slow", source={"kind": "fake", "fps": 30.0}, max_fps=30.0).persisted()]
+    }
+    started = asyncio.Event()
+
+    async def open_camera(camera_id, source):
+        started.set()
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(platform, "open_camera", open_camera)
+    engine = Engine(platform)
+    await engine.start()
+    await started.wait()
+
+    await engine._drop_camera("slow")
+
+    assert engine.cameras.get("slow") is None
+    assert "slow" not in engine._attach_tasks
+    assert platform.released_cameras == ["slow"]
+    await engine.stop()
+
+
+async def test_watchdog_and_failed_action(monkeypatch) -> None:
+    from printguard.engine import engine as engine_module
+
     watchdog.DEVICE_POLL_S = 0.1
     watchdog.WATCH_TICK_S = 0.05
     watchdog.OFFLINE_GRACE_S = 0.2
     watchdog.ACT_RETRY_S = 0.01
+    monkeypatch.setattr(engine_module, "STATE_TICK_S", 0.05)
+    monkeypatch.setattr(engine_module, "REATTACH_EVERY_TICKS", 1)
     platform = FakePlatform(infer_s=0.02, failing=True)
     platform.reject_actions = True
     async with running_engine(platform, camera_fps=[10.0]) as (engine, events):
@@ -149,16 +258,45 @@ async def test_watchdog_and_failed_action() -> None:
         assert any("pause failed" in e["message"] for e in errors), "failed action did not emit an error event"
 
         camera = next(iter(engine.cameras.values()))
-        camera.frame_source.online = False
+        failed_source = camera.frame_source
+        failed_source.online = False
         await asyncio.sleep(0.6)
         warnings = [e for e in events if e.get("event") == "warning" and not e["recovered"]]
         assert any("offline" in w["message"] for w in warnings), "camera outage did not warn"
         assert any(url == "http://ntfy/topic" for _, url in platform.http_calls), "outage warning was not pushed to notifiers"
-
-        camera.frame_source.online = True
-        await asyncio.sleep(0.3)
+        assert camera.id in platform.released_cameras, "failed camera resources were not released"
+        assert camera.frame_source is not failed_source and camera.online, "failed camera source was not attached afresh"
     recoveries = [e for e in events if e.get("event") == "warning" and e["recovered"]]
     assert any("back" in r["message"] for r in recoveries), "camera recovery was not announced"
+
+
+async def test_watchdog_restarts_stalled_camera_after_fresh_inference(monkeypatch) -> None:
+    from printguard.engine import engine as engine_module
+
+    monkeypatch.setattr(watchdog, "WATCH_TICK_S", 0.02)
+    monkeypatch.setattr(watchdog, "STALL_GRACE_S", 0.1)
+    monkeypatch.setattr(engine_module, "STATE_TICK_S", 0.02)
+    platform = FakePlatform(infer_s=0.01)
+    async with running_engine(platform, camera_fps=[20.0]) as (engine, events):
+        camera = next(iter(engine.cameras.values()))
+        await asyncio.sleep(0.1)
+        stalled_source = camera.frame_source
+        stalled_source.frozen = True
+        await asyncio.sleep(0.5)
+
+        assert camera.frame_source is not stalled_source and camera.online, "stalled camera source was not attached afresh"
+        assert camera.id in platform.released_cameras, "stalled camera resources were not released"
+        stalled_index = next(
+            index
+            for index, event in enumerate(events)
+            if event.get("event") == "warning" and "feed has stalled" in event["message"]
+        )
+        recovered_index = next(
+            index
+            for index, event in enumerate(events)
+            if event.get("event") == "warning" and event["recovered"] and "feed recovered" in event["message"]
+        )
+        assert any(event.get("event") == "result" for event in events[stalled_index + 1 : recovered_index])
 
 
 async def test_protocol_surfaces_errors_and_filters_settings() -> None:
