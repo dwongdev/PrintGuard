@@ -34,7 +34,7 @@ def monitor_watching(monitor: dict[str, Any], printers: "PrinterRegistry") -> bo
 
     A monitor is watched unless its linked printer positively reports a
     non-printing state. With no printer linked, no state polled yet, or an
-    unreachable printer the monitor stays watched — failing towards watching
+    unreachable printer the monitor stays watched - failing towards watching
     is the safe direction.
     """
     if not monitor.get("enabled"):

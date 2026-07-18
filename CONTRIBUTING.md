@@ -34,7 +34,7 @@ state handling extend the former; a new adapter gets its payloads tested in the 
 ## Regenerating the docs screenshots
 
 The images in `docs/assets/` are rendered from fake data (no backend, broker or video feed)
-by a Playwright script — regenerate them whenever the UI changes:
+by a Playwright script - regenerate them whenever the UI changes:
 
 ```bash
 cd web
@@ -53,17 +53,17 @@ platform's HTTP function.
 
 1. Create `printguard/engine/integrations/<service>.py` subclassing
    [`IntegrationAdapter`](printguard/engine/integrations/base.py):
-   - implement `fetch_state()`, normalising to the canonical `DeviceStatus` values —
+   - implement `fetch_state()`, normalising to the canonical `DeviceStatus` values -
      `offline` must mean "unreachable", not "idle", because it keeps inference watching;
    - implement `send()` for pause/resume/cancel, raising `RuntimeError` on rejection;
    - describe the config form as a JSON Schema (`secret: true` masks fields,
      `placeholder` hints at the expected value);
-   - set `docs_url` to the official API reference — it is required for review.
+   - set `docs_url` to the official API reference - it is required for review.
 2. Register an instance in
    [`integrations/__init__.py`](printguard/engine/integrations/__init__.py).
 
 The configuration form, connection test, device polling, inference gating and defect
-actions all follow from the adapter — no other change in either mode.
+actions all follow from the adapter - no other change in either mode.
 
 ## Adding a notification provider
 
@@ -75,7 +75,7 @@ Notifiers deliver defect snapshots and watchdog warnings.
      service supports uploads (`multipart_form()` in the same module builds the body),
      and raise `RuntimeError` with the service's error detail on rejection;
    - set `browser_ok = False` if the service sends no CORS headers (it will be offered
-     in hub mode only — check from a browser console before assuming);
+     in hub mode only - check from a browser console before assuming);
    - JSON-schema config and `docs_url`, exactly as for integrations.
 2. Register an instance in
    [`notifiers/__init__.py`](printguard/engine/notifiers/__init__.py).
@@ -86,7 +86,7 @@ adapter.
 ## Ground rules
 
 - **No mode forks.** If shared code needs something runtime-specific, extend the
-  `Platform` protocol on both sides with identical signatures — never branch on mode.
+  `Platform` protocol on both sides with identical signatures - never branch on mode.
 - **Fail loudly.** Anything on the alert path that can fail must emit an `error` or
   `warning` event. No bare `except: pass` where a user would want to know.
 - **Minimal code.** Prefer consolidating existing code over adding parallel variants;
@@ -115,12 +115,12 @@ Then add a matching section at the top of [CHANGELOG.md](CHANGELOG.md) in
 The section is published verbatim as the GitHub release notes, so describe the
 user-visible effect, not the implementation.
 
-A PR can only merge once three required checks pass —
+A PR can only merge once three required checks pass -
 
-- **tests** — the engine simulation suite;
-- **image** — the production Docker image must build, so a change that breaks the image
+- **tests** - the engine simulation suite;
+- **image** - the production Docker image must build, so a change that breaks the image
   can never reach `main`;
-- **version** — the version must be bumped past the last release and have a matching
+- **version** - the version must be bumped past the last release and have a matching
   `CHANGELOG.md` section, so every merge ships as a unique, documented, immutable
   version (re-publishing an existing tag is refused).
 
@@ -129,7 +129,7 @@ On merge, the [release workflow](.github/workflows/release.yml):
 1. builds and pushes the multi-arch image to `ghcr.io/oliverbravery/printguard`,
    tagged `X.Y.Z`, `X.Y` and `latest`;
 2. only after the image is published, tags the merge commit `vX.Y.Z` and creates the
-   GitHub release with the changelog section as its notes — a failed build never
+   GitHub release with the changelog section as its notes - a failed build never
    becomes a release;
 3. deploys the in-browser demo to GitHub Pages;
 4. builds the macOS and Windows desktop apps and attaches them to the release.

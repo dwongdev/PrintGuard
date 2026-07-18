@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Coding agent guidance for PrintGuard lives in **[CLAUDE.md](CLAUDE.md)** — the single
+Coding agent guidance for PrintGuard lives in **[CLAUDE.md](CLAUDE.md)** - the single
 source of truth for commands, architecture and the project's coding conventions. Read it
 first.
 

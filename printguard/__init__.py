@@ -1,4 +1,4 @@
-"""PrintGuard — real-time 3D print failure detection.
+"""PrintGuard - real-time 3D print failure detection.
 
 One engine, two platforms: the same inference loop, camera and printer
 registries and monitors run on CPython (hub mode) and Pyodide (local mode).

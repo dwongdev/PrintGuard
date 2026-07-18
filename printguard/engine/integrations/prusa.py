@@ -2,7 +2,7 @@
 
 PrusaLink runs on the printer itself (MK4, MK4S, MK3.9, MK3.5, MINI, XL, CORE
 One) or on a Raspberry Pi attached to an MK3/MK2.5. Its ``/api/v1`` API
-authenticates with HTTP Digest — username ``maker`` and the PrusaLink password
+authenticates with HTTP Digest - username ``maker`` and the PrusaLink password
 shown on the printer. 
 The client needs httpx, which the browser sandbox lacks, so it runs in hub mode only
 (``browser_ok`` is False); the printer also sends no CORS headers.
@@ -72,7 +72,7 @@ class PrusaAdapter(IntegrationAdapter):
 
         No active job (HTTP 204) is idle; any failure to reach or authenticate
         with the printer is offline, which keeps inference watching. The HTTP
-        function is unused — pyprusalink owns the digest-authenticated client.
+        function is unused - pyprusalink owns the digest-authenticated client.
         """
         try:
             job = await self._job(config)

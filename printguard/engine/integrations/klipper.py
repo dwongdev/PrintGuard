@@ -78,8 +78,8 @@ class KlipperAdapter(IntegrationAdapter):
 
         Each webcam's stream_url may be relative, resolved against the host's web
         port (see ``_resolve``); its stable uid keys the registered camera.
-        Webcams whose service advertises proprietary WebRTC signalling —
-        camera-streamer, the Crowsnest V5 default — are redirected to their
+        Webcams whose service advertises proprietary WebRTC signalling -
+        camera-streamer, the Crowsnest V5 default - are redirected to their
         MJPEG endpoint. WHEP endpoints pass through to the hub's MediaMTX client.
         """
         status, body = await http("GET", f"{config['base_url'].rstrip('/')}/server/webcams/list", headers=self._headers(config))
@@ -108,7 +108,7 @@ def _resolve(base_url: str, stream: str) -> str:
     """Resolves a webcam URL against the Moonraker host.
 
     Moonraker reports a relative path (e.g. ``/webcam/?action=stream``) as served
-    on its host's web port, not the API port carried by the base URL — its own
+    on its host's web port, not the API port carried by the base URL - its own
     documented example resolves ``/webcam/…`` to port 80. The API port (7125)
     routes no webcam paths, so a relative URL is joined to the bare host; an
     absolute URL is honoured verbatim.

@@ -56,7 +56,7 @@ def _video_devices() -> list[tuple[str, str]]:
 
     libavdevice only exposes device discovery through its log stream, so the
     names are parsed from a capture of the listing call's messages, raised to
-    INFO for the duration. Screens are excluded — a capture of the host's own
+    INFO for the duration. Screens are excluded - a capture of the host's own
     display is never a printer camera. Listing needs no camera permission;
     only opening a device does.
     """
@@ -112,8 +112,8 @@ def _device_open_options(device_id: str) -> tuple[dict[str, str], ...]:
     """Capture options to try when opening a device, most specific first.
 
     ffmpeg's avfoundation ignores the requested frame rate when no size is given
-    and settles on the device's last-listed format — routinely its top
-    resolution pinned to a handful of fps — so 30/15fps requests come back as
+    and settles on the device's last-listed format - routinely its top
+    resolution pinned to a handful of fps - so 30/15fps requests come back as
     EAGAIN. On macOS the real formats are read from AVFoundation and the largest
     size within a sane cap that offers a usable rate is pinned explicitly; other
     platforms negotiate over common frame rates.
@@ -169,8 +169,8 @@ def _authorize_macos_camera() -> None:
     is undetermined starts a session that delivers no frames, and once refused
     the capture input fails instantly with EAGAIN. So consent is settled through
     AVFoundation first, blocking until the user answers. A grant recorded for a
-    previous build still reads as authorised while capture is refused — each
-    unsigned build re-signs ad hoc with a new identity — so an authorised state
+    previous build still reads as authorised while capture is refused - each
+    unsigned build re-signs ad hoc with a new identity - so an authorised state
     is probed with a real capture input, and a refusal resets this app's own
     consent entry to let the prompt be asked afresh. Other platforms gate
     camera capture without a per-process consent step.
@@ -332,7 +332,7 @@ class AVSource:
         """Keeps the freshest frame until the source ends, transcoding if asked.
 
         A capture device announces its stream before a frame is buffered, so the
-        first reads — and any gap between frames — surface as EAGAIN. That is not
+        first reads - and any gap between frames - surface as EAGAIN. That is not
         a disconnect: the open session is kept and the read retried, rather than
         torn down and reconnected as a network drop would be.
         """
@@ -442,13 +442,13 @@ class ServerPlatform:
         RTSP/RTMP URLs and WebRTC WHEP endpoints are pulled by MediaMTX;
         HTTP/MJPEG ones are read directly and transcoded back into MediaMTX so
         both inference and viewers see them. Device sources are the host's own
-        cameras, captured through libavdevice in this process — not a browser
-        page — so on the desktop app they keep watching with every window closed;
+        cameras, captured through libavdevice in this process - not a browser
+        page - so on the desktop app they keep watching with every window closed;
         they are republished the same way.
 
         The wait must outlast a freshly published path's cold start: the remux
         announcing the track, a not-found retry, the demuxer probe, a mid-GOP
-        join and — when the container declares no rate — measuring the fps.
+        join and - when the container declares no rate - measuring the fps.
         Together those approach twenty seconds; sources that are truly dead
         just take this long to report.
         """

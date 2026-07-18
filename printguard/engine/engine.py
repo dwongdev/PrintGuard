@@ -157,7 +157,7 @@ class Engine:
 
         Alert, warning, error and device events are also written to the log,
         so the log tail carries the same timeline a maintainer sees in a bug
-        report's recent events — plus everything around it.
+        report's recent events - plus everything around it.
         """
         level = EVENT_LOG_LEVELS.get(event.get("event", ""))
         if level is not None:
@@ -272,7 +272,7 @@ class Engine:
         """Classifies a supplied frame, returning the model's verdict and defect score.
 
         Decodes the image on the platform and runs the same inference the scheduler
-        uses — the stateless equivalent of a camera's latest per-frame result, for a
+        uses - the stateless equivalent of a camera's latest per-frame result, for a
         frame the caller already holds rather than one PrintGuard pulls itself.
         """
         rgb = await self.platform.decode_jpeg(data)

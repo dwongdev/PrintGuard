@@ -1,7 +1,7 @@
 # Third-party notices
 
 PrintGuard's Docker image bundles the following third-party software as a separate,
-unmodified binary (mere aggregation — it runs as its own process and is not linked into
+unmodified binary (mere aggregation - it runs as its own process and is not linked into
 PrintGuard). Each is distributed under its own licence, reproduced below.
 
 ## MediaMTX

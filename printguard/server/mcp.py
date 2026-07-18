@@ -83,7 +83,7 @@ def build_mcp(
 
     @mcp.tool(name="classify_frame", tags={"read"})
     async def classify_frame(image_base64: str, sensitivity: float = 1.0) -> dict:
-        """Classifies a supplied print image for defects — no registered camera needed.
+        """Classifies a supplied print image for defects - no registered camera needed.
 
         Pass a base64-encoded JPEG or PNG frame (one shared in the conversation or
         downloaded) and get back {prediction, distances, margin, defect_score}: the

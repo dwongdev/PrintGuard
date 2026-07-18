@@ -32,7 +32,7 @@ async def fetch_updates(http: HttpFn, repo: str, current: str, asset: str | None
     Returns:
         A status dict with ``current``, ``latest``, ``available``, the
         ``releases`` newer than ``current`` (newest first, each carrying its
-        changelog ``notes`` and ``url``) and ``download`` — the latest
+        changelog ``notes`` and ``url``) and ``download`` - the latest
         release's URL for ``asset``, or None.
 
     Raises:

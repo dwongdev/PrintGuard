@@ -92,7 +92,7 @@ class Watchdog:
         Outages shorter than the grace period are ignored so reconnecting
         sources do not flap; each sustained outage warns exactly once and
         announces its recovery. A camera that stays online but stops
-        producing fresh frames counts as stalled — frozen feeds must not
+        producing fresh frames counts as stalled - frozen feeds must not
         pass for monitoring.
         """
         while True:

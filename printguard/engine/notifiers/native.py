@@ -1,8 +1,8 @@
 """Native desktop notifier.
 
 Raises a notification through the operating system's own notification centre on
-the computer running the PrintGuard desktop app — Notification Center on macOS,
-a toast on Windows — via desktop-notifier, which speaks each platform's native
+the computer running the PrintGuard desktop app - Notification Center on macOS,
+a toast on Windows - via desktop-notifier, which speaks each platform's native
 API (UNUserNotificationCenter, WinRT). It reaches no external service, so it
 needs no configuration; because that native call exists only in the packaged
 desktop app, the adapter is desktop-only and is never offered by the headless
@@ -47,8 +47,8 @@ class NativeNotifier(NotifierAdapter):
     def _write_snapshot(image: bytes) -> Path:
         """Persists the snapshot where the notification can attach it as a thumbnail.
 
-        Notification centres read the attachment by path after the send returns —
-        Windows keeps a reference until the toast is drawn — so a single reused
+        Notification centres read the attachment by path after the send returns -
+        Windows keeps a reference until the toast is drawn - so a single reused
         file is overwritten rather than deleted, bounding it to one snapshot.
         """
         _SNAPSHOT_PATH.write_bytes(image)

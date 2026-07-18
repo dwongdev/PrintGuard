@@ -84,8 +84,8 @@ def _set_windows_app_id() -> None:
 
     Windows groups a program's taskbar entry and its toast notifications by AppUserModelID;
     a frozen Python process has none of its own, so the desktop notifier's toasts would appear
-    under a generic identity. Pinning it to the app name — the same id desktop-notifier registers
-    the app icon against — gives those toasts PrintGuard's name and icon.
+    under a generic identity. Pinning it to the app name - the same id desktop-notifier registers
+    the app icon against - gives those toasts PrintGuard's name and icon.
     """
     if sys.platform != "win32":
         return
@@ -128,7 +128,7 @@ def _run_webview(url: str) -> None:
 
     The window owns its process's main thread, so it never contends with the
     tray's, and closing it ends only this process. The webview must keep its
-    website data between windows — pywebview's default private mode erases
+    website data between windows - pywebview's default private mode erases
     localStorage on every launch (on macOS it wipes the whole store), which
     would lose the page's record of which "this device" cameras it publishes,
     so a reopened window would never resume them.

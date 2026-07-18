@@ -1,4 +1,4 @@
-"""Resource registries — cameras, integrated printers and API tokens — each an
+"""Resource registries - cameras, integrated printers and API tokens - each an
 id-keyed collection of records carrying identity, access details and any live
 runtime state."""
 
@@ -58,7 +58,7 @@ class Camera:
         id: Stable identifier used across the protocol and as the MediaMTX
             path name in hub mode.
         name: Display name.
-        source: Access details — {"kind": "device", "device_id": ...} in
+        source: Access details - {"kind": "device", "device_id": ...} in
             local mode, {"kind": "url" | "path", ...} in hub mode.
         printer_id: Owning printer when the camera was exposed by a printer
             integration, else None. Such cameras are managed by their printer:
@@ -197,7 +197,7 @@ class Token:
     Attributes:
         id: Stable identifier used to name and revoke the token.
         name: Display name.
-        scope: Granted capability — one of read, control or manage.
+        scope: Granted capability - one of read, control or manage.
         hash: SHA-256 of the bearer secret, matched at auth time.
         hint: Short non-secret prefix shown in the UI.
         created: Unix timestamp the token was minted.

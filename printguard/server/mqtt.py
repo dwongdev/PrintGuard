@@ -5,7 +5,7 @@ surface that owns no monitoring logic of its own. It reconciles one Home
 Assistant device per monitor through MQTT *device-based* discovery, publishes
 each monitor's state and failure snapshot, and routes inbound Home Assistant
 commands (the Enabled switch and the printer Pause/Resume/Cancel buttons) back
-through ``engine.request()`` — so PrintGuard appears as a first-class,
+through ``engine.request()`` - so PrintGuard appears as a first-class,
 controllable device in Home Assistant without the engine knowing MQTT exists.
 
 Connection settings live in engine settings under ``mqtt`` and are edited from
