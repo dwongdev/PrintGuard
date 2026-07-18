@@ -333,6 +333,17 @@ class Engine:
 
         task.add_done_callback(forget)
 
+    async def restart_camera(self, camera: Camera) -> None:
+        """Releases a failed camera source and attaches it again from scratch."""
+        source = camera.frame_source
+        if source is None:
+            return
+        camera.frame_source = None
+        source.close()
+        await self.platform.release_camera(camera.id, camera.source)
+        if self.cameras.get(camera.id) is camera:
+            self._schedule_attach(camera)
+
     async def _ticker(self) -> None:
         tick = 0
         while True:

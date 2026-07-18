@@ -190,11 +190,15 @@ async def test_removing_camera_cancels_pending_attachment(monkeypatch) -> None:
     await engine.stop()
 
 
-async def test_watchdog_and_failed_action() -> None:
+async def test_watchdog_and_failed_action(monkeypatch) -> None:
+    from printguard.engine import engine as engine_module
+
     watchdog.DEVICE_POLL_S = 0.1
     watchdog.WATCH_TICK_S = 0.05
     watchdog.OFFLINE_GRACE_S = 0.2
     watchdog.ACT_RETRY_S = 0.01
+    monkeypatch.setattr(engine_module, "STATE_TICK_S", 0.05)
+    monkeypatch.setattr(engine_module, "REATTACH_EVERY_TICKS", 1)
     platform = FakePlatform(infer_s=0.02, failing=True)
     platform.reject_actions = True
     async with running_engine(platform, camera_fps=[10.0]) as (engine, events):
@@ -211,14 +215,14 @@ async def test_watchdog_and_failed_action() -> None:
         assert any("pause failed" in e["message"] for e in errors), "failed action did not emit an error event"
 
         camera = next(iter(engine.cameras.values()))
-        camera.frame_source.online = False
+        failed_source = camera.frame_source
+        failed_source.online = False
         await asyncio.sleep(0.6)
         warnings = [e for e in events if e.get("event") == "warning" and not e["recovered"]]
         assert any("offline" in w["message"] for w in warnings), "camera outage did not warn"
         assert any(url == "http://ntfy/topic" for _, url in platform.http_calls), "outage warning was not pushed to notifiers"
-
-        camera.frame_source.online = True
-        await asyncio.sleep(0.3)
+        assert camera.id in platform.released_cameras, "failed camera resources were not released"
+        assert camera.frame_source is not failed_source and camera.online, "failed camera source was not attached afresh"
     recoveries = [e for e in events if e.get("event") == "warning" and e["recovered"]]
     assert any("back" in r["message"] for r in recoveries), "camera recovery was not announced"
 

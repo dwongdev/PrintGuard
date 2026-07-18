@@ -94,7 +94,7 @@ class Watchdog:
                     self._online_since.setdefault(mid, now)
                 else:
                     self._online_since.pop(mid, None)
-                await self._edge(
+                offline = await self._edge(
                     f"offline:{mid}",
                     camera.online,
                     now,
@@ -103,6 +103,8 @@ class Watchdog:
                     f"Camera '{camera.name}' is offline — '{monitor['name']}' is NOT being monitored",
                     f"Camera '{camera.name}' is back — '{monitor['name']}' is monitored again",
                 )
+                if offline:
+                    await self._engine.restart_camera(camera)
                 progressing = not camera.online or now - max(camera.last_done, self._online_since.get(mid, now)) < STALL_GRACE_S
                 await self._edge(
                     f"stalled:{mid}",
@@ -136,17 +138,19 @@ class Watchdog:
         monitor: dict[str, Any],
         down_message: str,
         up_message: str,
-    ) -> None:
+    ) -> bool:
         if healthy:
             self._down_since.pop(key, None)
             if key in self._warned:
                 self._warned.discard(key)
                 await self._warn(monitor, up_message, recovered=True)
-            return
+            return False
         since = self._down_since.setdefault(key, now)
         if now - since >= grace and key not in self._warned:
             self._warned.add(key)
             await self._warn(monitor, down_message)
+            return True
+        return False
 
     async def _warn(self, monitor: dict[str, Any], message: str, recovered: bool = False) -> None:
         self._engine.emit({"event": "warning", "monitor_id": monitor["id"], "message": message, "recovered": recovered})

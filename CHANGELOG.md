@@ -22,6 +22,9 @@ The format is [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versions
 - **Camera and monitor status lights no longer flicker between healthy colours.** Camera indicators
   now show stable availability, while monitor indicators stay green when watching and switch red
   only for a genuine defect alert.
+- **RTSP cameras recover after a damaged stream.** If packet loss or decoder errors leave a camera
+  offline, PrintGuard now replaces the failed reader and its MediaMTX pull automatically instead
+  of retrying the same broken session until the camera is toggled manually.
 
 ## [2.3.5] - 2026-07-15
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import AsyncMock, Mock
 
 import httpx
 import numpy as np
@@ -287,6 +287,20 @@ async def test_cancelled_camera_open_closes_platform_source(monkeypatch) -> None
 
     source.close.assert_called_once()
     assert server._sources == {}
+
+
+async def test_releasing_pull_camera_removes_managed_path() -> None:
+    from printguard.server import platform
+
+    source = SimpleNamespace(close=Mock())
+    server = object.__new__(platform.ServerPlatform)
+    server.mediamtx = SimpleNamespace(remove_path=AsyncMock())
+    server._sources = {"camera": source}
+
+    await server.release_camera("camera", {"kind": "url", "url": "rtsp://camera/live"})
+
+    source.close.assert_called_once()
+    server.mediamtx.remove_path.assert_awaited_once_with("camera")
 
 
 async def test_camera_source_converts_only_grabbed_frames(monkeypatch) -> None:
