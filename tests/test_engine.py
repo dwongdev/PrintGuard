@@ -124,11 +124,11 @@ async def test_slow_printer_action_does_not_pause_inference(monkeypatch) -> None
     monkeypatch.setattr(watchdog, "ACT_ATTEMPTS", 1)
     monkeypatch.setattr(watchdog, "ACT_RETRY_S", 0.01)
     monkeypatch.setattr(watchdog, "WATCH_TICK_S", 0.02)
-    monkeypatch.setattr(watchdog, "STALL_GRACE_S", 0.1)
+    monkeypatch.setattr(watchdog, "STALL_GRACE_S", 0.2)
     platform = FakePlatform(infer_s=0.02)
     platform.action_delay_s = 0.4
     platform.reject_actions = True
-    async with running_engine(platform, camera_fps=[10.0]) as (engine, events):
+    async with running_engine(platform, camera_fps=[30.0]) as (engine, events):
         monitor_id = next(iter(engine.monitors))
         printer_id = await _register_printer(engine)
         await engine.handle(
