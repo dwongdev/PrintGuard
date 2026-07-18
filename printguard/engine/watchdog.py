@@ -211,7 +211,7 @@ class Watchdog:
         if action == "failed":
             body = f"AUTOMATIC {monitor['on_defect'].upper()} FAILED — check the printer"
         elif action == "none":
-            body = "No automatic action configured"
+            body = "Alert only: no printer action configured"
         else:
             body = f"Action taken: {action}"
         await self._send_alerts(title, body, image)

@@ -108,6 +108,18 @@ async def test_defect_pipeline() -> None:
     assert ("POST", "http://disc/hook") in platform.http_calls, "Discord alert was never delivered"
 
 
+async def test_alert_only_notification_wording() -> None:
+    platform = FakePlatform(infer_s=0.02, failing=True)
+    async with running_engine(platform, camera_fps=[10.0]) as (engine, _events):
+        monitor_id = next(iter(engine.monitors))
+        await engine.handle({"cmd": "settings.update", "patch": {"notifiers": {"ntfy": {"url": "http://ntfy/topic"}}}})
+        await engine.handle({"cmd": "monitor.update", "id": monitor_id, "patch": {"notify": True, "consecutive": 1}})
+        await asyncio.sleep(1.0)
+
+    request = next(request for request in platform.http_requests if request["url"] == "http://ntfy/topic")
+    assert request["headers"]["Message"] == "Alert only: no printer action configured"
+
+
 async def test_standby_gating() -> None:
     watchdog.DEVICE_POLL_S = 0.1
     platform = FakePlatform(infer_s=0.02, failing=True)
